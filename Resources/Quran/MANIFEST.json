@@ -1,0 +1,23 @@
+{
+  "authority" : "King Fahd Glorious Quran Printing Complex (KFGQPC)",
+  "dataset" : {
+    "ayah_count" : 6236,
+    "canonical_content_sha256" : "sha256:6511c557765a5b1b1e7b67464746c5021a867a66de42673925fac6178a3634e5",
+    "sqlite_sha256" : "sha256:715a1a81c6b5dec6ee32cff0c61936a453e88c327629bb0086d76e2ef47c81f6",
+    "surah_count" : 114
+  },
+  "import" : {
+    "importer" : "Scripts\/import_quran",
+    "importer_version" : "1.0.0",
+    "schema_version" : 1
+  },
+  "narration" : "Hafs",
+  "script" : "Uthmanic Unicode",
+  "source" : {
+    "archive_sha256" : "a7b0e5591945712ec5e4d6142938ae4d1e9b49bdc89dff06222789bfebdfd72c",
+    "official_md5" : "cf6841aea5b1d1fd70d032b43ff08278",
+    "official_sha1" : "36ea5ab0d7ea1702f17ff43f9b50924cccd77ebf",
+    "official_url" : "https:\/\/download.qurancomplex.gov.sa\/resources_dev\/UthmanicHafs_v2-0.zip",
+    "package" : "KFGQPC Hafs Narration (Standard) — UthmanicHafs_v2-0"
+  }
+}

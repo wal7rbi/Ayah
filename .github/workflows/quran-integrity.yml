@@ -1,0 +1,54 @@
+# Quran data supply-chain verification (see ARCHITECTURE.md §8 and
+# SECURITY.md's trust-model section). Runs unconditionally on every push
+# and pull request — verify_quran and the AyahKit test suite are both
+# fast enough that there's no cost benefit to path-filtering, and a path
+# filter is itself a footgun (a future file this should cover could
+# silently fall outside it).
+#
+# What this does NOT prove, by design (documented, not glossed over):
+#   - It does not verify that a PR's claimed official MD5/SHA-1 in
+#     MANIFEST.json genuinely came from KFGQPC's download page — that
+#     still requires a human reviewer to check the live page.
+#   - It does not re-download and re-run the full import from the
+#     original KFGQPC source on every run — that would make CI depend on
+#     an external network resource outside this project's control. It
+#     verifies self-consistency of what's already committed instead.
+name: Quran Integrity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quran-verify:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build verify_quran
+        run: cd Scripts/verify_quran && swift build
+
+      - name: Run verify_quran (structural checks + checksum + manifest cross-check)
+        run: Scripts/verify_quran/.build/debug/verify_quran Resources/Quran
+
+      - name: Run AyahKit test suite (includes Quran tampering-detection tests)
+        run: cd Packages/AyahKit && swift test
+
+      - name: Quran provenance guard
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" -- Resources/Quran/)
+          if echo "$CHANGED" | grep -qx "Resources/Quran/quran.sqlite"; then
+            for f in Resources/Quran/VERSION Resources/Quran/CHECKSUM Resources/Quran/MANIFEST.json; do
+              if ! echo "$CHANGED" | grep -qx "$f"; then
+                echo "quran.sqlite changed but $f did not — a legitimate re-import always updates VERSION/CHECKSUM/MANIFEST.json together. Refusing to pass without it." >&2
+                exit 1
+              fi
+            done
+          fi

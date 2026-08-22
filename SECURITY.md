@@ -1,0 +1,184 @@
+# Security
+
+## Reporting a vulnerability
+
+If you find a security issue in Ayah, please open a GitHub issue on this
+repository describing the problem. Since this project has no telemetry,
+no backend, and no server component, most security concerns will relate to
+the local application itself (e.g. entitlement misconfiguration, unsafe
+file handling, or a dependency vulnerability) rather than a remote attack
+surface. If the issue is sensitive, note that in the issue and a
+maintainer will follow up on how to share details privately.
+
+## Security posture (verified 2026-08-22)
+
+The app shell has existed for a while now, so this section records a real
+review against a built app rather than a design intent — see
+`ARCHITECTURE.md` for the current stage of the project. Verified on macOS
+26.5.2 (arm64), Xcode 26.3, both Debug and local Release configurations.
+
+- **App Sandbox**: on. `App/Ayah.entitlements` requests exactly two keys —
+  `com.apple.security.app-sandbox` and
+  `com.apple.security.personal-information.location` (added deliberately
+  for the opt-in "use current location" prayer-time convenience; see
+  `PRIVACY.md`'s "Location" section). Confirmed against the actual signed
+  binary, not just the source entitlements file:
+  `codesign -d --entitlements :- Ayah.app` on both Debug and Release
+  builds returns only those two keys plus `com.apple.security.get-task-allow`
+  — expected on a locally ("Sign to Run Locally") signed, non-notarized
+  build, and something to re-check once Release packaging/notarization
+  (a separate, not-yet-scoped later stage) produces a Developer-ID-signed
+  build. Hardened runtime is already on (`flags=...,runtime` in
+  `codesign -dv` output) even at this stage. All four bundled resource
+  files (`quran.sqlite`, `cities_filtered.sqlite`, the font, `CHECKSUM`)
+  are present and sealed in the built bundle.
+- **No network entitlement**: `com.apple.security.network.client` is
+  deliberately never requested — confirmed absent in the entitlement dump
+  above. This is a real, kernel-enforced restriction (see `PRIVACY.md` for
+  detail), not a policy statement. A repo-wide search for networking APIs
+  (`URLSession`, `URLRequest`, `NWConnection`, `NWListener`, raw sockets,
+  `SCNetworkReachability`) across `App/` and `Packages/AyahKit/Sources`
+  turns up zero matches — nothing in the code even attempts to reach the
+  network, so the sandbox restriction is defense-in-depth on top of an
+  already-networkless codebase, not the only thing standing in the way.
+- **No unnecessary permissions**: confirmed via both the entitlements file
+  and `Info.plist` — no Accessibility, Screen Recording, Microphone,
+  Camera, or Contacts entitlement/usage-description key exists anywhere.
+  Location is the one deliberate exception (see above), using
+  `requestWhenInUseAuthorization()` (`CurrentLocationProvider.swift`) —
+  the minimal-scope request, not `requestAlwaysAuthorization()`.
+  **Correction (2026-08-22, found during a later audit pass)**: this
+  section previously cited `Info.plist`'s `NSLocationUsageDescription`
+  string as what backs that call. It doesn't — per Apple's own docs,
+  `requestWhenInUseAuthorization()` requires
+  `NSLocationWhenInUseUsageDescription` specifically, and silently
+  ignores the request (no dialog, no delegate callback) if that key is
+  absent. It was absent. This meant the "استخدام الموقع الحالي" flow
+  never actually prompted — `CurrentLocationViewModel.fetchCurrentLocation()`
+  hung indefinitely, spinner and all, with no visible failure. Fixed by
+  adding `NSLocationWhenInUseUsageDescription` (same Arabic disclosure
+  text) alongside the pre-existing legacy key. Verified against a fresh
+  local build: the real macOS "Ayah would like to use your current
+  location" system dialog now appears, carrying that disclosure text —
+  it did not before this fix. This is exactly the kind of
+  wrong-key-cited-as-evidence mistake a security review can make by
+  reading the code's intent rather than checking the actual OS
+  requirement — worth remembering when reviewing any future
+  permission-prompt-triggering code.
+- **SQL injection surface**: reviewed every raw-SQLite call site
+  (`Persistence/SQLiteConnection.swift`, `Quran/QuranRepository.swift`,
+  `Prayer/LocationRepository.swift`, `Memorization/MemorizationRepository.swift`).
+  Every query that incorporates a value outside a fixed schema/column-list
+  string uses `sqlite3_bind_*` through a prepared statement — none build
+  SQL by interpolating caller-supplied data directly into a query string.
+  The only `String`-interpolated SQL anywhere is `\(Self.columns)`/
+  `\(Self.ayahColumns)`/`\(Self.cityColumns)`, each a private `static let`
+  constant, never a parameter — there is no reachable injection path from
+  UI input (memorization-set surah/ayah numbers, city selection, etc.)
+  into a raw query string.
+- **Quran data integrity**: the bundled `quran.sqlite` is treated as
+  immutable, checksummed content. `Resources/Quran/CHECKSUM` records a
+  content hash that `QuranRepository` verifies at startup via
+  `QuranIntegrityChecker`; `AppDelegate` surfaces a mismatch as a blocking
+  `NSAlert` rather than silently showing unverified text (confirmed by
+  reading `AppDelegate.makeQuranRepository()`). **Updated 2026-08-22**:
+  the previously-noted CI gap is now closed at the tooling level —
+  `.github/workflows/quran-integrity.yml` independently re-verifies the
+  checksum (and a new `MANIFEST.json` provenance record) on every push/PR,
+  plus a provenance guard blocking an unexplained `quran.sqlite` change,
+  and a Release-only Xcode build gate runs the same check before compiling
+  a Release build. See "Quran data supply-chain trust model" below for the
+  full chain. One caveat carried forward, not fully closed: this workflow
+  can't execute until the repo actually has `.git` history and a GitHub
+  remote (neither exists yet, see `CLAUDE.md`'s repository-state note) —
+  it's in place and correct, just dormant until then.
+- **Local mutable data (`ayah_user.sqlite`)**: written only to a fixed,
+  non-user-controlled path (`Application Support/Ayah/ayah_user.sqlite`
+  inside the sandbox container, built entirely from
+  `FileManager.default.url(for: .applicationSupportDirectory, ...)` with
+  no externally-influenced path components) — no path-traversal surface.
+- **Dependencies**: kept intentionally minimal. Adhan Swift (MIT, zero
+  dependencies) is the only third-party code dependency, pinned in
+  `Packages/AyahKit/Package.resolved` to a specific tagged revision
+  (`1.5.0`, commit `a6fa2de...`) rather than a floating branch — see
+  `THIRD_PARTY_LICENSES.md`.
+
+**Not yet done, deliberately out of scope for this pass**: `spctl`/
+notarization verification (there is no Developer-ID-signed build to check
+yet — that's the separate "Release packaging and notarization" later
+stage); a live sandbox-violation trace via `sudo log stream` while
+exercising every feature (a manual launch-and-quit during this review
+produced no denial events under `log show`, but that predicate is weak
+evidence on its own — treat the static entitlement dump above as the
+authoritative check, not this).
+
+## Quran data supply-chain trust model
+
+Added 2026-08-22 alongside the source-verification/manifest/tampering-test/
+CI/release-gate work described in `CLAUDE.md`. Each layer below protects a
+different stage and proves a different, narrow thing — they are not
+substitutes for one another, and none of them is a substitute for the
+others:
+
+1. **KFGQPC establishes textual authority.** Ayah's sole Quran textual
+   authority is the King Fahd Glorious Quran Printing Complex's official
+   developer platform (Hafs narration, Uthmanic Unicode script) — see
+   `ARCHITECTURE.md` §5. No second Quran dataset is reconciled against it.
+2. **Official KFGQPC MD5/SHA-1 establish identity of the downloaded
+   package.** `Scripts/import_quran` computes these from the archive and
+   compares them against the values KFGQPC publishes on the same download
+   page, hard-failing on mismatch, before any parsing happens. This proves
+   the local archive is byte-identical to what KFGQPC actually published
+   — nothing more, and specifically not a claim about the text's religious
+   authoritativeness.
+3. **Ayah's own SHA-256 establishes a modern cryptographic identity** for
+   the approved source archive and the generated dataset, recorded in
+   `MANIFEST.json` — see `ARCHITECTURE.md` §8.
+4. **The deterministic importer establishes how the database was
+   produced.** One documented path (`Scripts/import_quran`), the Uthmanic
+   text preserved exactly (never normalized, diacritic-stripped, or
+   otherwise transformed), structural validation on every field. See
+   `ARCHITECTURE.md` §7–§8 for the two-tier reproducibility model (source
+   integrity vs. semantic Quran integrity).
+5. **Tampering-detection tests prove the integrity mechanism actually
+   works**, not just that it exists — `QuranTamperingTests.swift` exercises
+   the real production checksum/count-guard code paths against
+   deliberately corrupted temp copies (never the real bundled file) and
+   confirms they're rejected.
+6. **CI prevents unverified Quran-data changes from merging** —
+   `.github/workflows/quran-integrity.yml`, see the updated bullet above.
+7. **macOS code signing protects the final application bundle after
+   signing** — a different stage from everything above, not a
+   replacement for it. Once `Ayah.app` is signed, modifying any resource
+   inside the bundle (including `quran.sqlite`) invalidates the code
+   signature; `codesign --verify --deep` (or Gatekeeper at launch, for a
+   notarized build) independently detects that. This says nothing about
+   whether the data was *correct* before signing — that's layers 1–6 —
+   only that the signed bundle hasn't been altered since.
+8. **Runtime SHA-256 verification is the final defense, not the only
+   one.** `QuranRepository`'s startup check (unchanged by this pass —
+   still opens the database read-only, verifies, refuses-and-alerts on
+   failure) catches anything that slipped past every layer above,
+   including a bundle that was never signed at all (a local/ad-hoc-signed
+   build, per this document's own entitlement-verification notes).
+
+**What none of this proves**: a checksum does not independently prove
+that Quran text is religiously authoritative. It proves that the data is
+identical to an already-approved authoritative source/artifact. The
+precise claim this whole chain supports is: *"Ayah's Quran data is
+identical to the KFGQPC-derived dataset approved by the project"* — not
+"cryptographically proven correct" in any stronger sense.
+
+**Deliberately deferred, not a v1 requirement**: Sigstore or GitHub
+Artifact Attestations for release provenance. The release workflow is
+structured so this can be added later, targeting the final distributable
+artifact (`.app`/`.zip`/`.dmg`) rather than signing `quran.sqlite`
+individually — but nothing here is wired up yet; this is a forward-looking
+note, not a claim of present capability.
+
+## Out of scope for v1
+
+Ayah has no user accounts, no network-facing API, and no server, so classes
+of vulnerability like authentication bypass, injection against a remote
+backend, or data breach of a hosted database do not apply to this project's
+architecture by construction.

@@ -1,0 +1,59 @@
+name: Ayah
+options:
+  bundleIdPrefix: com.ayah
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+packages:
+  AyahKit:
+    path: Packages/AyahKit
+targets:
+  Ayah:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: App
+        excludes:
+          - "Info.plist"
+          - "Ayah.entitlements"
+      - path: Resources
+        excludes:
+          - "**/SOURCE.md"
+          - "**/VERSION"
+          - "**/MANIFEST.json"
+        buildPhase: resources
+    preBuildScripts:
+      - name: "Quran integrity gate (Release only)"
+        script: |
+          if [ "$CONFIGURATION" = "Release" ]; then
+            set -e
+            echo "Release build — verifying Quran data integrity before compiling..."
+            (cd "$SRCROOT/Scripts/verify_quran" && swift build)
+            "$SRCROOT/Scripts/verify_quran/.build/debug/verify_quran" "$SRCROOT/Resources/Quran"
+            (cd "$SRCROOT/Packages/AyahKit" && swift test)
+          else
+            echo "Skipping Quran integrity gate for $CONFIGURATION build (Release-only, see ARCHITECTURE.md §8)."
+          fi
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ayah.app
+        PRODUCT_NAME: Ayah
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: App/Ayah.entitlements
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+    dependencies:
+      - package: AyahKit
