@@ -56,6 +56,12 @@ macOS will therefore block its first launch as an unidentified-developer
 app. After attempting to open Ayah, use **System Settings > Privacy &
 Security > Open Anyway** for this app. Do not disable Gatekeeper globally.
 
+[![Download Ayah for macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.0-macOS-arm64.dmg)
+
+The download button becomes active when the private GitHub Release contains
+the exactly named DMG. Repository access is still required; this button does
+not make a private release public.
+
 Download the accompanying `.sha256` file and verify the DMG before opening:
 
 ```sh
