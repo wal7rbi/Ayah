@@ -123,7 +123,12 @@ public final class CurrentLocationProvider: NSObject, LocationProviding {
     }
 }
 
-extension CurrentLocationProvider: @MainActor CLLocationManagerDelegate {
+// Xcode 16's CoreLocation overlay still declares these delegate requirements
+// as nonisolated, while newer SDKs carry actor annotations. `@preconcurrency`
+// preserves this class's main-actor isolation and defers the older overlay's
+// protocol-isolation check to runtime, where CLLocationManager delivers its
+// delegate callbacks on the manager's run loop.
+extension CurrentLocationProvider: @preconcurrency CLLocationManagerDelegate {
     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch self.manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
