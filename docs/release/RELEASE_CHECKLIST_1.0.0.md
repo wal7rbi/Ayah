@@ -6,10 +6,10 @@ model, operator, result, and evidence location for each manual run before using
 
 ## Automated gate
 
-- [ ] Clean release commit with annotated tag `v1.0.0`.
-- [ ] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures.
-- [ ] All tests, Debug/Release builds, Quran/GeoNames verification, resource checks, arm64 check, hardened ad-hoc signature, and entitlement allowlist pass.
-- [ ] Final DMG and published download both match the `.sha256` file.
+- [x] Clean release commit with annotated tag `v1.0.0` (tag object, tagger wal7rbi, points at `dbc04b4`; pushed to `origin`).
+- [x] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures (see the generated report bundled with the DMG build for this revision).
+- [x] All tests, Debug/Release builds, Quran/GeoNames verification, resource checks, arm64 check, hardened ad-hoc signature, and entitlement allowlist pass (same report).
+- [x] Final DMG and published download both match the `.sha256` file — verified 2026-08-30: local build checksum matched, and a fresh `gh release download` of the published GitHub asset also matched via `shasum -a 256 -c`.
 
 ## Supported-system matrix
 
@@ -42,10 +42,18 @@ model, operator, result, and evidence location for each manual run before using
 
 ## Published-download acceptance
 
-- [ ] GitHub release title/tag/version and uploaded filenames are exact.
-- [ ] Release notes clearly say Apple Silicon, macOS 13+, ad-hoc signed, and unnotarized.
+- [x] GitHub release title/tag/version and uploaded filenames are exact — published 2026-08-30 at
+      `https://github.com/wal7rbi/Ayah/releases/tag/v1.0.0`: title "Ayah 1.0.0", tag `v1.0.0`, assets
+      `Ayah-1.0.0-macOS-arm64.dmg` and `Ayah-1.0.0-macOS-arm64.dmg.sha256`, not a draft or prerelease.
+- [x] Release notes clearly say Apple Silicon, macOS 13+, ad-hoc signed, and unnotarized (published from
+      `docs/release/RELEASE_NOTES_1.0.0.md`, which states all four).
 - [ ] A fresh download is quarantined and follows the documented Privacy & Security > Open Anyway path.
-- [ ] Installed app launches, requests location only after user action, opens About, and relaunches successfully.
+      **Not yet verified**: the asset was fetched via `gh release download` (CLI/API) for checksum
+      verification, which only sets `com.apple.provenance`, not the `com.apple.quarantine` attribute a
+      real browser download sets — so this does not exercise the actual Gatekeeper path a user will hit.
+      Needs a real download through a browser.
+- [ ] Installed app launches, requests location only after user action, opens About, and relaunches
+      successfully. **Not yet verified** — depends on the browser-download step above.
 
 ## Release decision
 
