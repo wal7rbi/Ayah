@@ -5,6 +5,9 @@ every third-party dependency and bundled resource, its license, and — where
 a license is unclear or absent — the risk that was explicitly evaluated and
 accepted (or not) before use. Nothing here is bundled or linked against
 silently; every entry below was a deliberate, documented decision.
+The built app also includes a concise bilingual copy at
+`Resources/ThirdParty/ACKNOWLEDGEMENTS.txt`, displayed from **حول التطبيق**;
+this file remains the complete legal and provenance record.
 
 ## Code dependencies
 
@@ -16,6 +19,8 @@ silently; every entry below was a deliberate, documented decision.
   `Madhab` enum).
 - **Status**: Clean. Actively maintained, zero dependencies of its own,
   fully compatible with MIT and with a fully offline, sandboxed app.
+  The full upstream MIT notice is bundled as
+  `Resources/ThirdParty/Adhan-LICENSE.txt`.
 
 ## Bundled data resources
 
@@ -98,6 +103,8 @@ silently; every entry below was a deliberate, documented decision.
   attribution. Ayah bundles only a filtered subset (Saudi Arabia and other
   Muslim-majority countries initially), not the full world dataset.
   Attribution: "Geographic data © GeoNames.org contributors, CC BY 4.0."
+  The attribution and license link are bundled as
+  `Resources/ThirdParty/GeoNames-NOTICE.txt`.
 
 ## Reference-only projects (not bundled, not copied)
 

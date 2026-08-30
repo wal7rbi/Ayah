@@ -1,18 +1,27 @@
 import AppKit
 import AyahKit
+import Combine
 
-/// Owns the notch panel's lifecycle and geometry. On Macs without a
-/// notch, `attachToNotchIfAvailable()` simply does nothing — all
-/// interaction happens through `StatusItemController` instead, which is
-/// always present regardless of notch availability (see ARCHITECTURE.md
-/// §4, "Fallback for Macs without a notch"). Verse display on the
-/// non-notch popover fallback is not yet implemented — a known,
-/// deliberate gap, not an oversight.
+/// Owns the notch panel's lifecycle and geometry. On a Mac with a
+/// physical notch, the panel sits directly over the notch cutout and stays
+/// visible as a small collapsed pill at all times. On a Mac without one,
+/// `attachToNotchIfAvailable()` reuses the same panel/view stack as a
+/// floating bar pinned below the menu bar instead — hidden while idle and
+/// shown only while a verse batch or prayer alert is actually active,
+/// since there's no physical camera housing for a permanent pill to blend
+/// into (see ARCHITECTURE.md §4, "Fallback for Macs without a notch").
+/// Either way, `StatusItemController` remains the app's one Settings
+/// surface. Switching between the two modes while the app is already
+/// running (e.g. a notched MacBook entering clamshell mode with only an
+/// external display attached) is out of scope — the mode is picked once,
+/// here, at attach time.
 @MainActor
 final class NotchController {
     private var panel: NotchPanel?
     private let viewModel: NotchViewModel
     private let prayerAlertScheduler: PrayerAlertScheduler?
+    private var isFallbackMode = false
+    private var fallbackVisibilityCancellable: AnyCancellable?
 
     private static let expandedSize = CGSize(width: 480, height: 220)
 
@@ -32,15 +41,54 @@ final class NotchController {
     }
 
     func attachToNotchIfAvailable() {
-        guard let screen = Self.notchedScreen() else { return }
+        AppPerformanceSignposts.measure("NotchPresentation") {
+            if let screen = Self.notchedScreen() {
+                attachPhysicalNotch(on: screen)
+            } else {
+                attachFallbackBar()
+            }
+        }
+    }
 
-        let panel = NotchPanel(contentRect: .zero, viewModel: viewModel)
+    private func attachPhysicalNotch(on screen: NSScreen) {
+        let panel = NotchPanel(contentRect: .zero, viewModel: viewModel, isPhysicalNotch: true)
         self.panel = panel
         reposition(panel: panel, on: screen)
         panel.orderFrontRegardless()
         viewModel.startDisplayTimer()
         viewModel.startPrayerAlerts()
+        registerObservers()
+    }
 
+    /// Floating bar for Macs with no physical notch: the same panel/view
+    /// stack, pinned below the menu bar on the primary screen instead of
+    /// over a notch cutout, and only ordered on-screen while
+    /// `viewModel.isExpanded` — a verse batch or prayer alert is actually
+    /// showing — rather than left visible as an always-there pill.
+    private func attachFallbackBar() {
+        guard let screen = NSScreen.screens.first else { return }
+        isFallbackMode = true
+
+        let panel = NotchPanel(contentRect: .zero, viewModel: viewModel, isPhysicalNotch: false)
+        self.panel = panel
+        repositionFallback(panel: panel, on: screen)
+        viewModel.startDisplayTimer()
+        viewModel.startPrayerAlerts()
+
+        fallbackVisibilityCancellable = viewModel.$isExpanded
+            .sink { [weak panel] isExpanded in
+                guard let panel else { return }
+                if isExpanded {
+                    panel.orderFrontRegardless()
+                } else {
+                    panel.orderOut(nil)
+                }
+            }
+
+        registerObservers()
+    }
+
+    private func registerObservers() {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenParametersChanged),
@@ -62,6 +110,11 @@ final class NotchController {
 
     @objc private func screenParametersChanged() {
         guard let panel else { return }
+        if isFallbackMode {
+            guard let screen = NSScreen.screens.first else { return }
+            repositionFallback(panel: panel, on: screen)
+            return
+        }
         guard let screen = Self.notchedScreen() else {
             panel.orderOut(nil)
             return
@@ -85,6 +138,19 @@ final class NotchController {
         let origin = NSPoint(
             x: notchFrame.midX - size.width / 2,
             y: screen.frame.maxY - size.height
+        )
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    /// Positions the fallback panel centered below the menu bar on the
+    /// given screen. `visibleFrame` (not `frame`) excludes the menu bar
+    /// strip, so the bar sits flush underneath it instead of overlapping
+    /// menu-bar items — there's no notch cutout here to anchor to instead.
+    private func repositionFallback(panel: NotchPanel, on screen: NSScreen) {
+        let size = Self.expandedSize
+        let origin = NSPoint(
+            x: screen.frame.midX - size.width / 2,
+            y: screen.visibleFrame.maxY - size.height
         )
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }

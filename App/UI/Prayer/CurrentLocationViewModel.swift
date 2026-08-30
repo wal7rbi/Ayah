@@ -17,8 +17,8 @@ final class CurrentLocationViewModel: ObservableObject {
     private let provider: LocationProviding
     private let settingsStore: SettingsStore
 
-    init(provider: LocationProviding = CurrentLocationProvider(), settingsStore: SettingsStore) {
-        self.provider = provider
+    init(provider: LocationProviding? = nil, settingsStore: SettingsStore) {
+        self.provider = provider ?? CurrentLocationProvider()
         self.settingsStore = settingsStore
     }
 
@@ -29,6 +29,7 @@ final class CurrentLocationViewModel: ObservableObject {
         do {
             let coordinates = try await provider.requestOneShotLocation()
             settingsStore.settings.currentLocationCoordinates = coordinates
+            settingsStore.settings.currentLocationTimeZoneIdentifier = TimeZone.current.identifier
             settingsStore.settings.currentLocationFetchedAt = Date()
             settingsStore.settings.prayerLocationSource = .currentLocation
         } catch LocationProviderError.authorizationDenied {

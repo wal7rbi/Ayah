@@ -20,13 +20,18 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   quran-verify:
     runs-on: macos-14
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Build verify_quran
         run: cd Scripts/verify_quran && swift build
@@ -36,6 +41,11 @@ jobs:
 
       - name: Run AyahKit test suite (includes Quran tampering-detection tests)
         run: cd Packages/AyahKit && swift test
+
+      - name: Build Release app using the reviewed package resolution
+        run: >-
+          xcodebuild -project Ayah.xcodeproj -scheme Ayah -configuration Release
+          -disableAutomaticPackageResolution CODE_SIGNING_ALLOWED=NO build
 
       - name: Quran provenance guard
         if: github.event_name == 'pull_request'

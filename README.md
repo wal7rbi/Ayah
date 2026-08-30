@@ -2,14 +2,15 @@
 
 A lightweight, privacy-first, fully offline native macOS app that displays
 Quran verses from the MacBook notch area, helps memorize selected verses,
-and calculates Islamic prayer times entirely offline with local
-notifications.
+and calculates Islamic prayer times entirely offline with in-notch prayer
+alerts while the app is running.
 
-**Status: design phase.** Architecture, licensing, and technology
-decisions are finalized (see `ARCHITECTURE.md`); no application code
-exists yet. The project is being built in small, reviewable stages rather
-than all at once — see "Phased build order" in `ARCHITECTURE.md` for what
-comes next.
+**Status: 1.0.0 stable release candidate.** The native app, AyahKit,
+offline import/verification tools, settings, memorization, prayer-time
+calculation, in-notch alerts, About credits, and unnotarized DMG packaging
+are implemented. Publication remains blocked until every item in
+`docs/release/RELEASE_CHECKLIST_1.0.0.md` passes. This release policy does
+not use an Apple Developer account, Developer ID, or notarization.
 
 ## Priorities
 
@@ -26,9 +27,10 @@ architecture, and open-source friendliness.
 - Selectable memorization sets (single ayah, ayah ranges, or full surahs)
   that appear more frequently than general verses, at a configurable ratio
 - Fully offline Islamic prayer time calculation (Umm al-Qura by default,
-  other methods available) with local macOS notifications before prayer
-- Three reading themes (white, beige/Mushaf-style, black) with proper
-  Arabic/RTL typography
+  other configured methods available) with optional in-notch alerts
+- Arabic/RTL Quran rendering with the bundled KFGQPC Uthmanic Hafs font
+- An in-app **حول التطبيق** window crediting the KFGQPC Quran text/font,
+  Adhan Swift, and GeoNames without implying affiliation or endorsement
 
 ## What Ayah deliberately is not
 
@@ -42,7 +44,25 @@ architecture, and open-source friendliness.
 
 ## Requirements
 
-macOS 13 (Ventura) or later. Apple Silicon is the primary target.
+Apple Silicon Mac with macOS 13 (Ventura) or later. Version 1.0.0 does not
+include an Intel `x86_64` binary.
+
+## Installing the unnotarized release
+
+Ayah 1.0.0 is distributed directly as
+`Ayah-1.0.0-macOS-arm64.dmg`. It is ad-hoc signed to preserve bundle
+integrity, but it has no Apple Developer ID signature and is not notarized.
+macOS will therefore block its first launch as an unidentified-developer
+app. After attempting to open Ayah, use **System Settings > Privacy &
+Security > Open Anyway** for this app. Do not disable Gatekeeper globally.
+
+Download the accompanying `.sha256` file and verify the DMG before opening:
+
+```sh
+shasum -a 256 -c Ayah-1.0.0-macOS-arm64.dmg.sha256
+```
+
+The DMG contains complete Arabic and English installation instructions.
 
 ## Documentation
 
@@ -58,6 +78,8 @@ macOS 13 (Ventura) or later. Apple Silicon is the primary target.
   of the Quran text/font licensing situation
 - **`CONTRIBUTING.md`** — ground rules, especially around the Quran data
   pipeline
+- **`docs/release/`** — the stable-release checklist, bilingual
+  installation instructions, and prepared GitHub release notes
 
 ## License
 

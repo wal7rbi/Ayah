@@ -60,4 +60,39 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.settings.prayerNotificationReminderMinutes, AppSettings().prayerNotificationReminderMinutes)
         XCTAssertEqual(store.settings.isVerseDisplayEnabled, AppSettings().isVerseDisplayEnabled)
     }
+
+    func testMalformedTopLevelBlobIsObservable() throws {
+        let defaults = try makeIsolatedDefaults()
+        defaults.set(Data("not-json".utf8), forKey: Self.storageKey)
+        let store = SettingsStore(defaults: defaults)
+        XCTAssertEqual(store.settings, AppSettings())
+        XCTAssertNotNil(store.lastLoadError)
+    }
+
+    func testOutOfRangeFieldsAreIndependentlyDefaulted() throws {
+        let defaults = try makeIsolatedDefaults()
+        let json = """
+        {
+          "displayInterval": -1,
+          "versesPerDisplay": 999,
+          "memorizationWeightPercent": 101,
+          "prayerCalculationMethod": "other",
+          "selectedCityID": -5,
+          "currentLocationCoordinates": {"latitude": 91, "longitude": 46},
+          "currentLocationTimeZoneIdentifier": "Not/A_Time_Zone",
+          "prayerNotificationReminderMinutes": 999
+        }
+        """
+        defaults.set(Data(json.utf8), forKey: Self.storageKey)
+        let settings = SettingsStore(defaults: defaults).settings
+        let defaultsSettings = AppSettings()
+        XCTAssertEqual(settings.displayInterval, defaultsSettings.displayInterval)
+        XCTAssertEqual(settings.versesPerDisplay, defaultsSettings.versesPerDisplay)
+        XCTAssertEqual(settings.memorizationWeightPercent, defaultsSettings.memorizationWeightPercent)
+        XCTAssertEqual(settings.prayerCalculationMethod, .ummAlQura)
+        XCTAssertNil(settings.selectedCityID)
+        XCTAssertNil(settings.currentLocationCoordinates)
+        XCTAssertNil(settings.currentLocationTimeZoneIdentifier)
+        XCTAssertEqual(settings.prayerNotificationReminderMinutes, defaultsSettings.prayerNotificationReminderMinutes)
+    }
 }

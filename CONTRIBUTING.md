@@ -1,11 +1,10 @@
 # Contributing to Ayah
 
-Thank you for your interest in Ayah. The project is currently in its
-**design phase** — see `ARCHITECTURE.md` for the full technical design and
-current stage. Until the initial app shell and Quran import pipeline exist
-(the next stages of work), the most useful contributions are review and
-discussion of the architecture itself, particularly around the licensing
-decisions documented in `THIRD_PARTY_LICENSES.md`.
+Thank you for your interest in Ayah. The project is a working pre-release
+native macOS application. See `ARCHITECTURE.md` for the implemented design,
+`docs/audits/` for the latest verified state, and
+`THIRD_PARTY_LICENSES.md` before changing dependencies or bundled data.
+Small fixes with regression coverage are preferred over broad rewrites.
 
 ## Ground rules
 

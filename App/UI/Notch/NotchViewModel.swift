@@ -1,4 +1,5 @@
 import AyahKit
+import AppKit
 import Combine
 import Foundation
 import SwiftUI
@@ -32,6 +33,9 @@ final class NotchViewModel: ObservableObject {
     private var autoCollapseTask: Task<Void, Never>?
 
     private static let expandSpring = Animation.spring(response: 0.4, dampingFraction: 0.8)
+    private static var motionAnimation: Animation? {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : expandSpring
+    }
     /// How long newly-due content stays expanded before the notch
     /// collapses itself again.
     private static let autoCollapseDelay: Duration = .seconds(12)
@@ -86,7 +90,7 @@ final class NotchViewModel: ObservableObject {
             if case .verses = content {
                 cancelAutoCollapse()
                 content = .none
-                withAnimation(Self.expandSpring) { isExpanded = false }
+                withAnimation(Self.motionAnimation) { isExpanded = false }
             }
             return
         }
@@ -111,12 +115,12 @@ final class NotchViewModel: ObservableObject {
 
     private func expandAndAutoCollapse() {
         cancelAutoCollapse()
-        withAnimation(Self.expandSpring) { isExpanded = true }
+        withAnimation(Self.motionAnimation) { isExpanded = true }
         autoCollapseTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.autoCollapseDelay)
             guard !Task.isCancelled else { return }
             self?.autoCollapseTask = nil
-            withAnimation(Self.expandSpring) { self?.isExpanded = false }
+            withAnimation(Self.motionAnimation) { self?.isExpanded = false }
         }
     }
 
@@ -125,7 +129,7 @@ final class NotchViewModel: ObservableObject {
     /// instead of racing it.
     func toggleExpanded() {
         cancelAutoCollapse()
-        withAnimation(Self.expandSpring) { isExpanded.toggle() }
+        withAnimation(Self.motionAnimation) { isExpanded.toggle() }
     }
 
     private func cancelAutoCollapse() {

@@ -2,15 +2,17 @@
 
 ## Reporting a vulnerability
 
-If you find a security issue in Ayah, please open a GitHub issue on this
-repository describing the problem. Since this project has no telemetry,
+If you find a security issue in Ayah, do **not** post exploit details,
+private data, or an unreleased vulnerability in a public issue. Request a
+private maintainer contact or use GitHub private vulnerability reporting if
+it is enabled for the repository; public issues are appropriate only for
+non-sensitive hardening discussions. Since this project has no telemetry,
 no backend, and no server component, most security concerns will relate to
 the local application itself (e.g. entitlement misconfiguration, unsafe
 file handling, or a dependency vulnerability) rather than a remote attack
-surface. If the issue is sensitive, note that in the issue and a
-maintainer will follow up on how to share details privately.
+surface.
 
-## Security posture (verified 2026-08-22)
+## Security posture (verified 2026-08-30)
 
 The app shell has existed for a while now, so this section records a real
 review against a built app rather than a design intent — see
@@ -22,16 +24,14 @@ review against a built app rather than a design intent — see
   `com.apple.security.personal-information.location` (added deliberately
   for the opt-in "use current location" prayer-time convenience; see
   `PRIVACY.md`'s "Location" section). Confirmed against the actual signed
-  binary, not just the source entitlements file:
-  `codesign -d --entitlements :- Ayah.app` on both Debug and Release
-  builds returns only those two keys plus `com.apple.security.get-task-allow`
-  — expected on a locally ("Sign to Run Locally") signed, non-notarized
-  build, and something to re-check once Release packaging/notarization
-  (a separate, not-yet-scoped later stage) produces a Developer-ID-signed
-  build. Hardened runtime is already on (`flags=...,runtime` in
-  `codesign -dv` output) even at this stage. All four bundled resource
-  files (`quran.sqlite`, `cities_filtered.sqlite`, the font, `CHECKSUM`)
-  are present and sealed in the built bundle.
+  binary, not just the source entitlements file. Debug builds may include
+  `com.apple.security.get-task-allow`; the 1.0.0 Release configuration sets
+  `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`, and the packaging gate requires
+  the final ad-hoc-signed app to contain exactly the sandbox and location
+  keys. Any debug or network entitlement fails packaging. Hardened runtime
+  is required (`flags=...,runtime` in `codesign -dv`), and all runtime data,
+  font, acknowledgement, and third-party notice resources must be present
+  and sealed in the final bundle.
 - **No network entitlement**: `com.apple.security.network.client` is
   deliberately never requested — confirmed absent in the entitlement dump
   above. This is a real, kernel-enforced restriction (see `PRIVACY.md` for
@@ -88,25 +88,34 @@ review against a built app rather than a design intent — see
   plus a provenance guard blocking an unexplained `quran.sqlite` change,
   and a Release-only Xcode build gate runs the same check before compiling
   a Release build. See "Quran data supply-chain trust model" below for the
-  full chain. One caveat carried forward, not fully closed: this workflow
-  can't execute until the repo actually has `.git` history and a GitHub
-  remote (neither exists yet, see `CLAUDE.md`'s repository-state note) —
-  it's in place and correct, just dormant until then.
+  full chain. The workflow is hardened with read-only contents permission,
+  disabled checkout credential persistence, a bounded timeout, and a
+  full-SHA action pin. Remote execution still has to be observed in the
+  actual GitHub repository; local inspection cannot claim a hosted run
+  succeeded.
 - **Local mutable data (`ayah_user.sqlite`)**: written only to a fixed,
   non-user-controlled path (`Application Support/Ayah/ayah_user.sqlite`
   inside the sandbox container, built entirely from
   `FileManager.default.url(for: .applicationSupportDirectory, ...)` with
   no externally-influenced path components) — no path-traversal surface.
+- **GeoNames integrity**: `LocationRepository` verifies the bundled
+  `cities_filtered.sqlite` against `GEONAMES_CHECKSUM`, validates SQLite
+  column types, coordinate ranges, and IANA time zones, and refuses city
+  selection/prayer display if any check fails. The checksum authenticates
+  an approved local artifact; it is not an independent upstream signature.
 - **Dependencies**: kept intentionally minimal. Adhan Swift (MIT, zero
   dependencies) is the only third-party code dependency, pinned in
   `Packages/AyahKit/Package.resolved` to a specific tagged revision
   (`1.5.0`, commit `a6fa2de...`) rather than a floating branch — see
   `THIRD_PARTY_LICENSES.md`.
 
-**Not yet done, deliberately out of scope for this pass**: `spctl`/
-notarization verification (there is no Developer-ID-signed build to check
-yet — that's the separate "Release packaging and notarization" later
-stage); a live sandbox-violation trace via `sudo log stream` while
+**Deliberately not part of the 1.0.0 distribution policy**: Developer ID
+signing and Apple notarization require an Apple Developer Program account.
+Ayah instead produces an arm64, hardened-runtime, ad-hoc-signed DMG and
+documents macOS's per-app Privacy & Security > Open Anyway flow. The fresh,
+quarantined GitHub-download exercise remains a mandatory manual release
+check; a local build cannot prove that path. Also not yet done: a live
+sandbox-violation trace via `sudo log stream` while
 exercising every feature (a manual launch-and-quit during this review
 produced no denial events under `log show`, but that predicate is weak
 evidence on its own — treat the static entitlement dump above as the

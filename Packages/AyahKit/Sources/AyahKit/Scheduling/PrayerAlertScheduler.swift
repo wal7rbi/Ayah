@@ -29,20 +29,26 @@ public final class PrayerAlertScheduler {
     private let locationRepository: LocationRepository?
     private let settingsStore: SettingsStore
     private let now: () -> Date
+    private let notificationCenter: NotificationCenter
 
     private var settingsCancellable: AnyCancellable?
+    private var systemChangeCancellables: Set<AnyCancellable> = []
     private var timerSource: DispatchSourceTimer?
     private var onAlertDue: ((PrayerAlertDisplay) -> Void)?
+    private var scheduleGeneration: UInt = 0
+    var rearmGeneration: UInt { scheduleGeneration }
 
     public init(
         quranRepository: QuranRepository?,
         locationRepository: LocationRepository?,
         settingsStore: SettingsStore,
+        notificationCenter: NotificationCenter = .default,
         now: @escaping () -> Date = Date.init
     ) {
         self.quranRepository = quranRepository
         self.locationRepository = locationRepository
         self.settingsStore = settingsStore
+        self.notificationCenter = notificationCenter
         self.now = now
     }
 
@@ -52,10 +58,17 @@ public final class PrayerAlertScheduler {
         settingsCancellable = settingsStore.$settings
             .removeDuplicates()
             .sink { [weak self] _ in self?.armNextTimer() }
+        for name in [Notification.Name.NSSystemClockDidChange, .NSSystemTimeZoneDidChange] {
+            notificationCenter.publisher(for: name)
+                .sink { [weak self] _ in self?.armNextTimer() }
+                .store(in: &systemChangeCancellables)
+        }
     }
 
     public func stop() {
         settingsCancellable = nil
+        systemChangeCancellables.removeAll()
+        scheduleGeneration &+= 1
         timerSource?.cancel()
         timerSource = nil
         onAlertDue = nil
@@ -71,6 +84,10 @@ public final class PrayerAlertScheduler {
     }
 
     private func armNextTimer() {
+        let interval = PerformanceSignposts.begin("PrayerSchedulerRearm")
+        defer { PerformanceSignposts.end("PrayerSchedulerRearm", interval) }
+        scheduleGeneration &+= 1
+        let generation = scheduleGeneration
         timerSource?.cancel()
         timerSource = nil
 
@@ -90,7 +107,7 @@ public final class PrayerAlertScheduler {
                 coordinates: coordinates,
                 calculationMethod: settings.prayerCalculationMethod,
                 asrMadhab: settings.asrMadhab,
-                reminderMinutes: settings.prayerNotificationReminderMinutes,
+                reminderMinutes: min(180, max(0, settings.prayerNotificationReminderMinutes)),
                 timeZone: timeZone,
                 now: referenceNow
             ) + Self.prayerAlertEvents(
@@ -98,7 +115,7 @@ public final class PrayerAlertScheduler {
                 coordinates: coordinates,
                 calculationMethod: settings.prayerCalculationMethod,
                 asrMadhab: settings.asrMadhab,
-                reminderMinutes: settings.prayerNotificationReminderMinutes,
+                reminderMinutes: min(180, max(0, settings.prayerNotificationReminderMinutes)),
                 timeZone: timeZone,
                 now: referenceNow
             )
@@ -109,7 +126,7 @@ public final class PrayerAlertScheduler {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + max(1, next.fireDate.timeIntervalSince(referenceNow)), leeway: .seconds(5))
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
+            guard let self, self.scheduleGeneration == generation else { return }
             let ayah = self.quranRepository?.randomAyah(searchableTextContains: Self.salahSearchSubstring)
             self.onAlertDue?(PrayerAlertDisplay(event: next, ayah: ayah))
             self.armNextTimer()
@@ -125,18 +142,21 @@ public final class PrayerAlertScheduler {
     /// `Coordinates`: `PrayerCalculator.prayerTimes(...)` requires the
     /// target location's zone (not the Mac's system zone) to compute the
     /// correct calendar day — see ARCHITECTURE.md §9's "Update". A
-    /// selected city carries its own IANA zone; current-location has none
-    /// (no reverse-geocoding), so it falls back to `.current`, matching
-    /// `PopoverContentView.activeTimeZoneIdentifier`'s same fallback.
+    /// selected city carries its own IANA zone; current-location uses the
+    /// system IANA zone captured with the one-shot coordinates.
     private func resolveLocation() -> (coordinates: Coordinates, timeZone: TimeZone)? {
         switch settingsStore.settings.prayerLocationSource {
         case .city:
             guard let id = settingsStore.settings.selectedCityID,
-                  let city = locationRepository?.city(id: id) else { return nil }
-            return (city.coordinates, TimeZone(identifier: city.timeZoneIdentifier) ?? .current)
+                  let city = locationRepository?.city(id: id),
+                  let timeZone = TimeZone(identifier: city.timeZoneIdentifier) else { return nil }
+            return (city.coordinates, timeZone)
         case .currentLocation:
             guard let coordinates = settingsStore.settings.currentLocationCoordinates else { return nil }
-            return (coordinates, .current)
+            let identifier = settingsStore.settings.currentLocationTimeZoneIdentifier
+                ?? TimeZone.current.identifier
+            guard let timeZone = TimeZone(identifier: identifier) else { return nil }
+            return (coordinates, timeZone)
         }
     }
 

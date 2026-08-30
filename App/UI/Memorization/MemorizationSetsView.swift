@@ -22,12 +22,23 @@ struct MemorizationSetsView: View {
 
     @State private var sets: [MemorizationSet]
     @State private var editorTarget: EditorTarget?
+    @State private var loadErrorMessage: String?
+    @State private var writeErrorMessage: String?
 
     init(quranRepository: QuranRepository, memorizationRepository: MemorizationRepository) {
         self.quranRepository = quranRepository
         self.memorizationRepository = memorizationRepository
         self.surahs = quranRepository.surahs()
         _sets = State(initialValue: memorizationRepository.fetchAll())
+        _loadErrorMessage = State(initialValue: Self.loadErrorMessage(for: memorizationRepository))
+    }
+
+    /// `fetchAll()` returns `[]` both when there are genuinely no sets and
+    /// when the read itself failed — `lastFetchError` is what
+    /// distinguishes them, so the empty-state text below only ever means
+    /// "no sets," never "something went wrong and we couldn't tell you."
+    private static func loadErrorMessage(for repository: MemorizationRepository) -> String? {
+        repository.lastFetchError != nil ? "تعذر تحميل مجموعات الحفظ. حاول مرة أخرى." : nil
     }
 
     private var surahsByNumber: [Int: Surah] {
@@ -53,6 +64,17 @@ struct MemorizationSetsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let loadErrorMessage {
+                Text(loadErrorMessage)
+                    .foregroundStyle(.red)
+                    .padding(8)
+            }
+            if let writeErrorMessage {
+                Text(writeErrorMessage)
+                    .foregroundStyle(.red)
+                    .padding(8)
+                    .accessibilityLabel("تعذر حفظ تغييرات مجموعة الحفظ")
+            }
             if sets.isEmpty {
                 Spacer()
                 Text("لا توجد مجموعات حفظ بعد")
@@ -138,6 +160,7 @@ struct MemorizationSetsView: View {
 
     private func reload() {
         sets = memorizationRepository.fetchAll()
+        loadErrorMessage = Self.loadErrorMessage(for: memorizationRepository)
     }
 
     private func save(
@@ -145,33 +168,48 @@ struct MemorizationSetsView: View {
         surahNumber: Int, startAyah: Int, endAyah: Int,
         mode: MemorizationSet.RepetitionMode, isEnabled: Bool
     ) {
-        switch target {
-        case .add:
-            try? memorizationRepository.create(
-                surahNumber: surahNumber, startAyah: startAyah, endAyah: endAyah,
-                repetitionMode: mode, isEnabled: isEnabled
-            )
-        case .edit(var set):
-            set.surahNumber = surahNumber
-            set.startAyah = startAyah
-            set.endAyah = endAyah
-            set.repetitionMode = mode
-            set.isEnabled = isEnabled
-            try? memorizationRepository.update(set)
+        do {
+            switch target {
+            case .add:
+                try memorizationRepository.create(
+                    surahNumber: surahNumber, startAyah: startAyah, endAyah: endAyah,
+                    repetitionMode: mode, isEnabled: isEnabled
+                )
+            case .edit(var set):
+                set.surahNumber = surahNumber
+                set.startAyah = startAyah
+                set.endAyah = endAyah
+                set.repetitionMode = mode
+                set.isEnabled = isEnabled
+                try memorizationRepository.update(set)
+            }
+            writeErrorMessage = nil
+            editorTarget = nil
+            reload()
+        } catch {
+            writeErrorMessage = "تعذر حفظ مجموعة الحفظ. تحقق من القيم وحاول مرة أخرى."
         }
-        editorTarget = nil
-        reload()
     }
 
     private func setEnabled(_ set: MemorizationSet, to isEnabled: Bool) {
         var updated = set
         updated.isEnabled = isEnabled
-        try? memorizationRepository.update(updated)
-        reload()
+        do {
+            try memorizationRepository.update(updated)
+            writeErrorMessage = nil
+            reload()
+        } catch {
+            writeErrorMessage = "تعذر تحديث مجموعة الحفظ. حاول مرة أخرى."
+        }
     }
 
     private func delete(_ set: MemorizationSet) {
-        try? memorizationRepository.delete(id: set.id)
-        reload()
+        do {
+            try memorizationRepository.delete(id: set.id)
+            writeErrorMessage = nil
+            reload()
+        } catch {
+            writeErrorMessage = "تعذر حذف مجموعة الحفظ. حاول مرة أخرى."
+        }
     }
 }

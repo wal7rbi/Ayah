@@ -1,0 +1,5 @@
+Ayah includes a filtered subset of geographic data from GeoNames.org
+contributors, licensed under Creative Commons Attribution 4.0 International:
+https://creativecommons.org/licenses/by/4.0/
+
+Source: https://www.geonames.org/

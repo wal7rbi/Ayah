@@ -8,41 +8,105 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchController: NotchController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        AppPerformanceSignposts.measure("LaunchInitialization") {
+            NSApp.setActivationPolicy(.accessory)
 
-        registerBundledFonts()
-        let settingsStore = SettingsStore()
-        let quranRepository = makeQuranRepository()
-        let memorizationRepository = makeMemorizationRepository()
-        let locationRepository = makeLocationRepository()
-        let verseScheduler = quranRepository.flatMap { qr in
-            memorizationRepository.map { mr in
-                VerseScheduler(quranRepository: qr, memorizationRepository: mr, settingsStore: settingsStore)
+            registerBundledFonts()
+            let settingsStore = SettingsStore()
+            let quranRepository = makeQuranRepository()
+            let memorizationRepository = makeMemorizationRepository()
+            let locationRepository = makeLocationRepository()
+            let verseScheduler = quranRepository.flatMap { qr in
+                memorizationRepository.map { mr in
+                    VerseScheduler(quranRepository: qr, memorizationRepository: mr, settingsStore: settingsStore)
+                }
             }
+
+            let prayerAlertScheduler = PrayerAlertScheduler(
+                quranRepository: quranRepository,
+                locationRepository: locationRepository,
+                settingsStore: settingsStore
+            )
+
+            statusItemController = StatusItemController(
+                settingsStore: settingsStore,
+                quranRepository: quranRepository,
+                memorizationRepository: memorizationRepository,
+                locationRepository: locationRepository
+            )
+
+#if AYAH_PERFORMANCE_AUTOMATION
+            startPerformanceAutomationIfRequested()
+#endif
+
+            let notchController = NotchController(
+                quranRepository: quranRepository,
+                verseScheduler: verseScheduler,
+                prayerAlertScheduler: prayerAlertScheduler,
+                settingsStore: settingsStore
+            )
+            notchController.attachToNotchIfAvailable()
+            self.notchController = notchController
         }
-
-        let prayerAlertScheduler = PrayerAlertScheduler(
-            quranRepository: quranRepository,
-            locationRepository: locationRepository,
-            settingsStore: settingsStore
-        )
-
-        statusItemController = StatusItemController(
-            settingsStore: settingsStore,
-            quranRepository: quranRepository,
-            memorizationRepository: memorizationRepository,
-            locationRepository: locationRepository
-        )
-
-        let notchController = NotchController(
-            quranRepository: quranRepository,
-            verseScheduler: verseScheduler,
-            prayerAlertScheduler: prayerAlertScheduler,
-            settingsStore: settingsStore
-        )
-        notchController.attachToNotchIfAvailable()
-        self.notchController = notchController
     }
+
+#if AYAH_PERFORMANCE_AUTOMATION
+    /// Runs only in the dedicated profiling build produced by
+    /// `Scripts/profile_ui_cycles.sh`; normal Debug/Release builds do not
+    /// compile this command-line automation path.
+    private func startPerformanceAutomationIfRequested() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let cycles = Self.integerArgument(
+            named: "--ayah-performance-popover-cycles",
+            in: arguments,
+            range: 1...500
+        ) else { return }
+        let delayMilliseconds = Self.integerArgument(
+            named: "--ayah-performance-cycle-delay-ms",
+            in: arguments,
+            range: 20...2_000
+        ) ?? 50
+        guard let statusItemController else { return }
+
+        Task { @MainActor in
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_WARMUP_STARTED")
+            await statusItemController.runAutomatedPopoverCycles(
+                count: 5,
+                delay: .milliseconds(delayMilliseconds)
+            )
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_WARMUP_FINISHED")
+            try? await Task.sleep(for: .seconds(2))
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_BASELINE_READY")
+            try? await Task.sleep(for: .seconds(2))
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_CYCLES_STARTED")
+            await statusItemController.runAutomatedPopoverCycles(
+                count: cycles,
+                delay: .milliseconds(delayMilliseconds)
+            )
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_CYCLES_FINISHED")
+            try? await Task.sleep(for: .seconds(2))
+            Self.writePerformanceMarker("AYAH_PERFORMANCE_COMPLETE")
+            NSApp.terminate(nil)
+        }
+    }
+
+    private static func integerArgument(
+        named name: String,
+        in arguments: [String],
+        range: ClosedRange<Int>
+    ) -> Int? {
+        guard let index = arguments.firstIndex(of: name),
+              arguments.indices.contains(index + 1),
+              let value = Int(arguments[index + 1]),
+              range.contains(value)
+        else { return nil }
+        return value
+    }
+
+    private static func writePerformanceMarker(_ marker: StaticString) {
+        FileHandle.standardError.write(Data("\(marker)\n".utf8))
+    }
+#endif
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
@@ -110,12 +174,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Builds the repository against the bundled `cities_filtered.sqlite`
     /// (ARCHITECTURE.md §12). Unlike a Quran data integrity failure (§8),
-    /// this data isn't checksum-verified and isn't the app's #1
-    /// correctness priority — a failure here just means city selection
+    /// the bundled checksum is required and corrupt or substituted data
+    /// fails closed. A failure here just means city selection
     /// (and therefore prayer-time display) is unavailable this launch,
     /// surfaced as a non-critical alert rather than blocking launch.
     private func makeLocationRepository() -> LocationRepository? {
-        guard let dbURL = Bundle.main.url(forResource: "cities_filtered", withExtension: "sqlite") else {
+        guard let dbURL = Bundle.main.url(forResource: "cities_filtered", withExtension: "sqlite"),
+              let checksumURL = Bundle.main.url(forResource: "GEONAMES_CHECKSUM", withExtension: nil)
+        else {
             presentErrorAlert(
                 title: "آية: بيانات المدن غير متوفرة",
                 message: "لم يتم العثور على بيانات المدن ضمن حزمة التطبيق. لن يمكن اختيار مدينة أو عرض أوقات الصلاة.",
@@ -124,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         do {
-            return try LocationRepository(databasePath: dbURL.path)
+            return try LocationRepository(databasePath: dbURL.path, checksumPath: checksumURL.path)
         } catch {
             presentErrorAlert(
                 title: "آية: بيانات المدن غير متوفرة",

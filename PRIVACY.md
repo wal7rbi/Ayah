@@ -14,19 +14,24 @@ never transmitted anywhere:
   memorization weighting, selected city, prayer calculation method, Asr
   calculation method, prayer-notification toggle and lead time. Stored via
   `UserDefaults`.
-- **Current-location coordinates**, if you explicitly opt into "استخدام
+- **Current-location coordinates and time zone**, if you explicitly opt into "استخدام
   الموقع الحالي" (use current location) as your prayer-time input instead
   of picking a city — see "Location" below. The last-fetched coordinates
-  and fetch time are cached via `UserDefaults` so the app doesn't need to
-  ask again on every launch.
+  fetch time, and the Mac's IANA time-zone identifier at fetch time are
+  cached via `UserDefaults` so the app doesn't need to ask again on every
+  launch or reinterpret an old fix after travel.
 - **Memorization sets** — the surah/ayah ranges you've chosen to memorize,
   their enabled/disabled state, and repetition mode. Stored in a small local
-  SQLite database that only Ayah can read.
+  SQLite database in Ayah's sandbox container.
 - **The Quran text itself** — bundled read-only inside the app; never
   modified, never uploaded, never synced.
 
 Ayah does not create a user account, does not require sign-in, and has no
 concept of a user identity beyond "whoever is logged into this Mac."
+The cached coordinates and memorization database are not independently
+encrypted. App Sandbox limits Ayah's own access, but it is not a defense
+against an attacker or process already operating as the same macOS user;
+that local-device threat remains a documented hardening opportunity.
 
 ## What Ayah never does
 
@@ -91,8 +96,9 @@ requires no location permission and no such traffic.
 ## Notifications
 
 Prayer-time reminders are not OS notifications at all — they render as an
-in-app popup in the notch, the same UI element that shows Quran verses,
-timed and drawn entirely by Ayah's own process while it's running. Ayah
+in-app popup in the notch (or, on a Mac without one, a floating bar in the
+same place), the same UI element that shows Quran verses, timed and drawn
+entirely by Ayah's own process while it's running. Ayah
 does not use macOS's `UserNotifications` framework for this, requests no
 notification permission, and there is no push notification service — no
 third party is ever involved, because nothing leaves the app to be

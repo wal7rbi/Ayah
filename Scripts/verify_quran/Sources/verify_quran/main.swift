@@ -101,42 +101,38 @@ guard recomputedChecksum == expectedChecksum else {
 }
 
 let manifestPath = (dir as NSString).appendingPathComponent("MANIFEST.json")
-if FileManager.default.fileExists(atPath: manifestPath) {
-    guard let manifestData = FileManager.default.contents(atPath: manifestPath) else {
-        fail("could not read MANIFEST.json at \(manifestPath)")
-    }
-    let manifest: QuranManifest
-    do {
-        manifest = try JSONDecoder().decode(QuranManifest.self, from: manifestData)
-    } catch {
-        fail("could not decode MANIFEST.json: \(error)")
-    }
-    guard manifest.dataset.canonicalContentSHA256 == expectedChecksum else {
-        fail("""
+guard let manifestData = FileManager.default.contents(atPath: manifestPath) else {
+    fail("could not read required MANIFEST.json at \(manifestPath)")
+}
+let manifest: QuranManifest
+do {
+    manifest = try JSONDecoder().decode(QuranManifest.self, from: manifestData)
+} catch {
+    fail("could not decode MANIFEST.json: \(error)")
+}
+guard manifest.dataset.canonicalContentSHA256 == expectedChecksum else {
+    fail("""
         MANIFEST.json dataset.canonical_content_sha256 (\(manifest.dataset.canonicalContentSHA256)) \
         does not match CHECKSUM (\(expectedChecksum))
         """)
-    }
-    guard manifest.dataset.surahCount == 114, manifest.dataset.ayahCount == 6236 else {
-        fail("""
+}
+guard manifest.dataset.surahCount == 114, manifest.dataset.ayahCount == 6236 else {
+    fail("""
         MANIFEST.json dataset counts (\(manifest.dataset.surahCount) surahs, \
         \(manifest.dataset.ayahCount) ayahs) do not match the canonical 114/6236
         """)
-    }
-    guard let sqliteData = FileManager.default.contents(atPath: dbPath) else {
-        fail("could not read \(dbPath) to verify MANIFEST.json's sqlite_sha256")
-    }
-    let recomputedSQLiteSHA256 = "sha256:" + SHA256.hash(data: sqliteData).map { String(format: "%02x", $0) }.joined()
-    guard manifest.dataset.sqliteSHA256 == recomputedSQLiteSHA256 else {
-        fail("""
+}
+guard let sqliteData = FileManager.default.contents(atPath: dbPath) else {
+    fail("could not read \(dbPath) to verify MANIFEST.json's sqlite_sha256")
+}
+let recomputedSQLiteSHA256 = "sha256:" + SHA256.hash(data: sqliteData).map { String(format: "%02x", $0) }.joined()
+guard manifest.dataset.sqliteSHA256 == recomputedSQLiteSHA256 else {
+    fail("""
         MANIFEST.json dataset.sqlite_sha256 (\(manifest.dataset.sqliteSHA256)) does not match \
         the recomputed file-bytes hash of quran.sqlite (\(recomputedSQLiteSHA256)) — the bundled \
         database file has changed since the manifest was generated
         """)
-    }
-    print("verify_quran: MANIFEST.json cross-checked OK.")
-} else {
-    print("verify_quran: no MANIFEST.json found — skipping manifest cross-check.")
 }
+print("verify_quran: MANIFEST.json cross-checked OK.")
 
 print("verify_quran: OK — 114 surahs, 6236 ayahs, checksum verified.")

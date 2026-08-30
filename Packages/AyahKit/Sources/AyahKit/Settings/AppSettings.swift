@@ -47,6 +47,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// not a live subscription (§18: no continuous background work).
     /// Only read when `prayerLocationSource` is `.currentLocation`.
     public var currentLocationCoordinates: Coordinates?
+    /// The system IANA time-zone identifier captured with the one-shot
+    /// location. Keeping it alongside the coordinates avoids silently
+    /// recalculating cached prayer times in a different zone after travel.
+    public var currentLocationTimeZoneIdentifier: String?
     /// When `currentLocationCoordinates` was last fetched — shown in the
     /// Settings UI so a stale fix (e.g. after traveling) is visible
     /// rather than silently reused forever.
@@ -83,6 +87,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         selectedCityID: Int? = nil,
         prayerLocationSource: PrayerLocationSource = .city,
         currentLocationCoordinates: Coordinates? = nil,
+        currentLocationTimeZoneIdentifier: String? = nil,
         currentLocationFetchedAt: Date? = nil,
         arePrayerNotificationsEnabled: Bool = false,
         prayerNotificationReminderMinutes: Int = 5
@@ -96,6 +101,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.selectedCityID = selectedCityID
         self.prayerLocationSource = prayerLocationSource
         self.currentLocationCoordinates = currentLocationCoordinates
+        self.currentLocationTimeZoneIdentifier = currentLocationTimeZoneIdentifier
         self.currentLocationFetchedAt = currentLocationFetchedAt
         self.arePrayerNotificationsEnabled = arePrayerNotificationsEnabled
         self.prayerNotificationReminderMinutes = prayerNotificationReminderMinutes
@@ -125,16 +131,30 @@ public struct AppSettings: Codable, Equatable, Sendable {
         }
 
         isVerseDisplayEnabled = decode(.isVerseDisplayEnabled, default: true)
-        displayInterval = decode(.displayInterval, default: 900)
-        versesPerDisplay = decode(.versesPerDisplay, default: 2)
-        memorizationWeightPercent = decode(.memorizationWeightPercent, default: 70)
-        prayerCalculationMethod = decode(.prayerCalculationMethod, default: .ummAlQura)
+        let decodedInterval: TimeInterval = decode(.displayInterval, default: 900)
+        displayInterval = decodedInterval.isFinite && (60...86_400).contains(decodedInterval) ? decodedInterval : 900
+        let decodedVerses: Int = decode(.versesPerDisplay, default: 2)
+        versesPerDisplay = (1...5).contains(decodedVerses) ? decodedVerses : 2
+        let decodedWeight: Int = decode(.memorizationWeightPercent, default: 70)
+        memorizationWeightPercent = (0...100).contains(decodedWeight) ? decodedWeight : 70
+        let decodedMethod: CalculationMethod = decode(.prayerCalculationMethod, default: .ummAlQura)
+        prayerCalculationMethod = decodedMethod == .other ? .ummAlQura : decodedMethod
         asrMadhab = decode(.asrMadhab, default: .shafi)
-        selectedCityID = decode(.selectedCityID, default: nil)
+        let decodedCityID: Int? = decode(.selectedCityID, default: nil)
+        selectedCityID = decodedCityID.flatMap { $0 > 0 ? $0 : nil }
         prayerLocationSource = decode(.prayerLocationSource, default: .city)
-        currentLocationCoordinates = decode(.currentLocationCoordinates, default: nil)
+        let decodedCoordinates: Coordinates? = decode(.currentLocationCoordinates, default: nil)
+        currentLocationCoordinates = decodedCoordinates.flatMap {
+            $0.latitude.isFinite && (-90...90).contains($0.latitude)
+                && $0.longitude.isFinite && (-180...180).contains($0.longitude) ? $0 : nil
+        }
+        let decodedTimeZone: String? = decode(.currentLocationTimeZoneIdentifier, default: nil)
+        currentLocationTimeZoneIdentifier = decodedTimeZone.flatMap {
+            TimeZone(identifier: $0) == nil ? nil : $0
+        }
         currentLocationFetchedAt = decode(.currentLocationFetchedAt, default: nil)
         arePrayerNotificationsEnabled = decode(.arePrayerNotificationsEnabled, default: false)
-        prayerNotificationReminderMinutes = decode(.prayerNotificationReminderMinutes, default: 5)
+        let decodedReminder: Int = decode(.prayerNotificationReminderMinutes, default: 5)
+        prayerNotificationReminderMinutes = (0...180).contains(decodedReminder) ? decodedReminder : 5
     }
 }

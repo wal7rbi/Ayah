@@ -18,6 +18,8 @@
   "tens to low hundreds of KB" city-picker list (ARCHITECTURE.md §12)
   rather than every populated place GeoNames knows about.
 - **Row count**: 4654 cities
+- **Bundled SQLite SHA-256**: `46262aa5aa5af8acbd00d36808e0bf5e6d2522bb94ad58659c52801ecc6298f1`
+  (also stored as `GEONAMES_CHECKSUM` and verified before runtime use)
 - **Countries included**: AE, AF, AL, AZ, BA, BD, BF, BH, BN, DJ, EG, EH, GM, GN, ID, IQ, IR, JO, KG, KM, KW, KZ, LB, LY, MA, ML, MR, MV, MY, NE, NG, OM, PK, PS, QA, SA, SD, SL, SN, SO, SY, TD, TJ, TM, TN, TR, UZ, XK, YE
 - **Arabic names**: 1529 of 4654 cities (32%) have a `name_arabic` populated from GeoNames' `alternateNamesV2` dump (`isolanguage == "ar"`, historic entries excluded, GeoNames' own `isPreferredName` flag preferred, then the shortest non-colloquial candidate — see `Scripts/import_geonames/Sources/import_geonames/ArabicNames.swift` for the exact selection logic and a documented caveat about occasional Dari/Pashto mistagging for Afghan cities). The remainder have `name_arabic = NULL` and fall back to `name` (GeoNames' primary field, not consistently Arabic-script — e.g. transliterated Latin "Riyadh" for Saudi cities that lack a tagged Arabic alternate).
 

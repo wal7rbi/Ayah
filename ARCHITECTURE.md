@@ -3,17 +3,20 @@
 Ayah is a lightweight, privacy-first, fully offline native macOS app that
 displays Quran verses from the MacBook notch area, helps with memorization
 of selected verses, and calculates Islamic prayer times entirely offline
-with local notifications.
+with in-notch prayer alerts while the app is running.
 
 Priorities, in order: **(1)** correctness of Quran data, **(2)** privacy
 and security, **(3)** very low CPU/memory/wakeup/battery usage, **(4)** a
 native macOS experience, **(5)** a simple, maintainable architecture,
 **(6)** open-source friendliness.
 
-This document is the output of the project's research stage. It records
-concrete decisions with reasoning, not an open-ended survey of options.
-**As of this document, no application code exists yet** — see
-[Phased build order](#phased-build-order) for what comes next.
+This began as the research-stage design and now records both implemented
+decisions and explicitly marked history. The app target, AyahKit, bundled
+datasets, import/verification tools, settings, memorization, prayer-time
+calculation, in-notch alerts, About/source credits, and unnotarized DMG
+packaging exist. Version 1.0.0 intentionally targets Apple Silicon and does
+not use Developer ID or notarization; the stable artifact remains gated on
+the hardware/accessibility checklist in `docs/release/`.
 
 ---
 
@@ -41,7 +44,7 @@ an `Info.plist`. A bare Xcode app target, on the other hand, makes it
 awkward to run fast, headless `swift test` in CI without a simulator or UI
 test runner. Splitting the two solves both problems and enforces a useful
 boundary: `AyahKit` contains everything that doesn't need AppKit —
-`Quran`, `Memorization`, `Prayer`, `Notifications`, `Scheduling`,
+`Quran`, `Memorization`, `Prayer`, `Scheduling`,
 `Settings`, `Persistence` — and is fully unit-testable in isolation. Only
 notch/menu-bar window management, which is inherently AppKit-bound, lives
 in the app target.
@@ -69,7 +72,7 @@ Ayah/
     Tests/AyahKitTests/*.swift
   Resources/
     Quran/{quran.sqlite, SOURCE.md, VERSION, CHECKSUM}
-    GeoNames/{cities_filtered.sqlite, SOURCE.md}
+    GeoNames/{cities_filtered.sqlite, GEONAMES_CHECKSUM, SOURCE.md}
     Fonts/ (KFGQPC Uthmanic Hafs)
   Scripts/
     import_quran/{main.swift, ...}
@@ -108,13 +111,49 @@ technique (none of their code is copied — see `THIRD_PARTY_LICENSES.md`):
 
 ## 4. Fallback for Macs without a notch
 
-A standard `NSStatusItem` with an `NSPopover` (or a SwiftUI `MenuBarExtra`
-with `.window` style) — the universal, well-understood macOS menu-bar
-utility pattern. This is not just a fallback for non-notch hardware (older
-MacBooks, Mac mini/Studio, iMac, or a notched MacBook driving only an
-external display): it is also the **default entry point for Settings** on
-every Mac, notch or not, so there's only one interaction pattern to
-maintain rather than two divergent UIs.
+Two separate things are both true on a Mac without a notch, and this
+section covers both.
+
+**Settings** always go through a standard `NSStatusItem` with an
+`NSPopover` (`StatusItemController`/`PopoverContentView`) — the universal,
+well-understood macOS menu-bar utility pattern. This is not just a fallback
+for non-notch hardware (older MacBooks, Mac mini/Studio, iMac, or a notched
+MacBook driving only an external display): it is also the **default entry
+point for Settings** on every Mac, notch or not, so there's only one
+interaction pattern to maintain rather than two divergent UIs.
+
+**Verse display and prayer alerts** get their own fallback, reusing the
+same view stack as the physical notch rather than going unimplemented or
+duplicating it. `NotchController.attachToNotchIfAvailable()` picks one of
+two paths once, at attach time: `attachPhysicalNotch(on:)` (today's
+existing behavior — a panel sized to the real notch cutout, always visible
+as a small collapsed pill) or `attachFallbackBar()` when
+`notchedScreen()` finds no notch. The fallback reuses the exact same
+`NotchPanel`/`NotchViewModel`/`NotchContentView` — same Uthmanic-font verse
+card, same prayer-alert card, same expand/auto-collapse timing — as a
+borderless floating panel pinned to the top-center of the primary screen,
+positioned via `screen.visibleFrame.maxY` (which excludes the menu bar
+strip) so it sits flush below the menu bar rather than overlapping it.
+Two differences from the physical-notch path, both driven by a
+`NotchContentView.isPhysicalNotch` flag threaded down from `NotchPanel`:
+- **Shape**: a plain flat-topped, rounded-bottom `UnevenRoundedRectangle`
+  instead of `NotchShape`'s concave top flare — there's no physical camera
+  housing here for a concave flare to read as growing out of.
+- **Visibility**: hidden entirely while idle (`NotchController` subscribes
+  to `viewModel.$isExpanded` and orders the panel front/out accordingly)
+  rather than left as an always-visible collapsed pill — there's nothing
+  for a permanent floating pill to visually blend into on this class of
+  Mac the way the physical notch pill blends into the camera housing.
+
+Both `VerseScheduler.start(...)` and `PrayerAlertScheduler.start(...)` are
+called from both paths identically — before this, they were only ever
+started from the physical-notch path, so verse display and prayer alerts
+silently never ran at all on a non-notch Mac (see §13's own note on this,
+now superseded). Switching modes while already running (e.g. a notched
+MacBook entering clamshell mode with only an external display attached) is
+out of scope — the same scope boundary the physical-notch path's own
+`screenParametersChanged()` already had (it only re-positions/hides within
+whichever mode was picked at attach time, not switches between them).
 
 ## 5. Quran text source & licensing
 
@@ -370,7 +409,9 @@ performed), MIT license, zero external dependencies, supports macOS
 `.ummAlQura` among many other methods (Muslim World League, Egyptian,
 Karachi, Dubai, Moonsighting Committee, North America, Kuwait, Qatar,
 Singapore, Tehran, Turkey, and others), so the calculation-method setting
-can expose the full set, defaulting to Umm al-Qura.
+can expose supported named presets, defaulting to Umm al-Qura. Adhan's
+`.other` is deliberately excluded because it is a 0°/0° custom-parameter
+template and Ayah does not expose custom-angle inputs.
 
 **Update: `PrayerCalculator.prayerTimes(...)` now takes a required
 `timeZone: TimeZone` parameter — a bug fix, not a new feature.** Adhan
@@ -395,10 +436,9 @@ confirmed to actually fail against the pre-fix implementation before
 being folded into the passing suite, not just plausible-looking.
 `PopoverContentView.todaysPrayerTimes` and `PrayerAlertScheduler`
 (`resolveLocation()`/`armNextTimer()`) now resolve and pass the correct
-zone (the selected city's, or `TimeZone.current` only for the
-current-location path, which has no known zone without reverse-geocoding
-— matching the same fallback `activeTimeZoneIdentifier` already used for
-display formatting).
+zone (the selected city's, or the system IANA identifier cached alongside
+a one-shot current-location fix; `TimeZone.current` is retained only as a
+backward-compatible fallback for legacy settings).
 
 ## 10. Umm al-Qura implementation details
 
@@ -451,11 +491,11 @@ Settings popover — never automatically, never on a recurring timer (§18's
 no-continuous-background-work priority: this is a single `CLLocationManager
 .requestLocation()` call per tap, not a live subscription). The fetched
 coordinates are cached in `AppSettings.currentLocationCoordinates` /
-`currentLocationFetchedAt` and reused until the user taps again; there is
+`currentLocationFetchedAt` and `currentLocationTimeZoneIdentifier` and
+reused until the user taps again; there is
 no reverse-geocoding (no `CLGeocoder`, which is itself not offline), so a
-current-location fix has no city name or bundled timezone — the Settings
-UI falls back to `TimeZone.current` (the Mac's own system timezone,
-already known locally) rather than looking one up.
+current-location fix has no city name or reverse-geocoded timezone — the
+system IANA identifier at fetch time is cached rather than looking one up.
 
 **This is the one place in Ayah where "fully offline" needs a caveat, and
 it must stay disclosed, not quietly glossed over.** Macs ship no GPS chip,
@@ -564,15 +604,15 @@ other's content, and the enum makes "exactly one active kind" true by
 construction. Both card types share the same top safe-zone padding (see
 §3) and 12-second auto-collapse.
 
-Non-notch Macs get no fallback for prayer alerts, matching the
-verse-display feature's own existing gap and §4's "one interaction
-pattern to maintain" philosophy — `PrayerAlertScheduler` is only ever
-started from `NotchController.attachToNotchIfAvailable()`, so it
-structurally never runs at all without a notch. Location resolution
-still reuses `prayerLocationSource`/`selectedCityID`/
-`currentLocationCoordinates` directly (§12), the same way it backed the
-deleted scheduler and still backs the Settings popover's live
-prayer-time preview.
+Non-notch Macs get the same prayer alerts as notched ones — see §4's
+floating-bar fallback, which starts `PrayerAlertScheduler` (and
+`VerseScheduler`) exactly the same way the physical-notch path does. This
+supersedes an earlier gap where `PrayerAlertScheduler` was only ever
+started from the physical-notch path and so structurally never ran at all
+without a notch. Location resolution still reuses
+`prayerLocationSource`/`selectedCityID`/`currentLocationCoordinates`
+directly (§12), the same way it backed the deleted scheduler and still
+backs the Settings popover's live prayer-time preview.
 
 ## 14. Launch at login
 
@@ -598,12 +638,11 @@ table here.
 ## 16. App Sandbox & entitlements
 
 App Sandbox is adopted as defense-in-depth, not only because it's required
-for Mac App Store distribution. Planned entitlements: base
+for Mac App Store distribution. Current entitlements are base
 `com.apple.security.app-sandbox`, and nothing else beyond what's strictly
-needed — reading bundled resources requires no entitlement, local
-`UserDefaults`/small SQLite user-data writes require no entitlement, and
-local notifications are authorized at runtime via
-`UNUserNotificationCenter`, not a sandbox entitlement.
+needed — reading bundled resources requires no entitlement and local
+`UserDefaults`/small SQLite user-data writes require no entitlement.
+Prayer alerts are in-process UI and request no notification permission.
 **`com.apple.security.network.client` is deliberately never requested.**
 This omission is real, kernel-level (`sandboxd`) enforcement of "this
 process cannot open an outbound connection" — not merely an App Review
@@ -619,6 +658,13 @@ addition beyond the base sandbox entitlement. It's opt-in at the UI level
 or any other entitlement; verify with `codesign -d --entitlements :-` on
 the built app after touching anything here, same as before.
 
+The 1.0.0 Release configuration is arm64-only and disables Xcode's base
+entitlement injection. Release packaging requires an ad-hoc signature with
+hardened runtime and exactly the sandbox/location entitlement pair; a
+`get-task-allow` or network entitlement is a hard failure. Because there is
+no Apple Developer account, users must approve the downloaded app through
+macOS's per-app Open Anyway flow.
+
 ## 17. Network independence
 
 Falls directly out of §16 plus dependency hygiene: no network entitlement,
@@ -629,7 +675,7 @@ is present anywhere in the project, by design.
 
 ## 18. Expected CPU / RAM / energy characteristics
 
-- **Idle CPU target: ~0.1–1%.** Achieved by never running a continuous
+- **Idle CPU target: ~0.1–1%.** Supported structurally by never running a continuous
   animation loop (see §3) and by using event-driven scheduling exclusively
   (see below) rather than any polling loop.
 - **Scheduling**: a single self-rearming `DispatchSourceTimer`, armed only
@@ -648,22 +694,31 @@ is present anywhere in the project, by design.
   changes when the user actually changes something — no continuous or
   periodic disk activity while idle.
 
-**Measured (2026-08-22, Release build, Apple M4 MacBook Air, 16GB, macOS
-26.2)** — see `CLAUDE.md`'s "Performance measurement" narrative for full
-method: idle CPU sampled at effectively **0.0%** over a 30s window once
-settled (one ~4.4% blip observed only in the first couple seconds after
-launch — SwiftUI's first layout pass / DB open+checksum, not idle
-behavior), comfortably inside the ~0.1–1% target. Physical footprint
-(`vmmap --summary`, the metric Activity Monitor actually shows — not raw
-RSS from `ps`, which reads ~90MB here because it double-counts shared
-framework pages mapped into the process, a known macOS RSS-accounting
-quirk rather than a real per-process cost) was **13.5MB steady-state /
-16.2MB peak**, well inside "low tens of MB." Thread count steady at 4.
-Disk-write behavior wasn't independently traced live (would need
-`fs_usage` under `sudo`) — verified instead by code inspection, matching
-the design already in place: `SettingsStore.save()` only runs from its
-`didSet`, `VerseScheduler` re-queries `MemorizationRepository` without
-writing, and `MemorizationRepository` only writes on explicit user edits.
+**Measured release-candidate evidence (2026-08-23, Apple M4 MacBook Air,
+16GB, macOS 26.5.2)** is recorded in
+`docs/performance/2026-08-23-release-candidate-baseline-v1.md`. Three
+Release XCTest runs established stable baselines for Quran/GeoNames
+initialization, bilingual city search, prayer calculation, memorization,
+and verse selection. A sanitized launch trace measured the internal
+`LaunchInitialization` interval at 52.65ms and repository initialization
+at 1.44–7.19ms. A 30-second Time Profiler trace recorded no running-thread
+samples after 15 seconds, but that is not a substitute for the required
+30-minute energy/wakeup run. A sanitized Allocations trace exists. On
+2026-08-24, an isolated profiling build performed five warm-up cycles and
+200 measured real-popover cycles; the canonical full run's settled RSS
+changed from 120.40MiB to 103.58MiB (−16.82MiB), passing the provisional
+5MiB trend guardrail. A separate 30-minute isolated idle run captured 180
+samples: CPU median/p95 0.000%, mean 0.023%, memory 30→21MiB, and
+power-impact median/p95 0.000. This is repeatable trend evidence, not an
+independent proof of zero leaks or per-process wakeup attribution.
+
+The verse timer therefore remains at zero leeway: the approved change
+gate requires two comparable long idle traces attributing at least 10% of
+Ayah's wakeups to that timer, and this measurement pass did not establish
+that. Historical 2026-08-22 manual measurements (13.5MB steady-state /
+16.2MB peak physical footprint, four threads) remain useful context but
+were not silently promoted to current release-candidate results. The
+repeatable workflow is documented in `docs/performance/README.md`.
 
 ## 19. Major implementation risks
 
@@ -674,19 +729,20 @@ In priority order:
 2. **Notch geometry APIs are relatively new** (macOS 12+) and
    hardware-dependent — needs real-device testing across notched and
    non-notched Macs, and Macs driving only an external display.
-3. **KFGQPC's export structure is unverified** until actually downloaded
-   and inspected during the import-pipeline stage — juz/page/surah-name
-   field availability is assumed here, not confirmed (§7).
-4. **Local-notification behavior across sleep/restart/timezone changes**
-   relies on documented-but-not-absolutely-guaranteed OS behavior,
-   mitigated by rescheduling on every app launch as a safety net (§13).
+3. **Bundled-data provenance anchors** remain reviewer-controlled files in
+   the same source tree as their datasets. Checksums detect accidental or
+   post-approval changes but do not independently attest upstream truth.
+4. **In-process alert behavior across sleep/restart/clock/time-zone
+   changes** needs continued real-hardware testing. The scheduler rearms on
+   wake, settings changes, system clock changes, and time-zone changes.
 
 ## 20. Repository structure
 
 See §2 above for the full tree. Top-level docs (this file, `README.md`,
 `PRIVACY.md`, `SECURITY.md`, `CONTRIBUTING.md`, `LICENSE`,
-`THIRD_PARTY_LICENSES.md`) exist as of this stage; everything under `App/`,
-`Packages/`, `Resources/`, and `Scripts/` is planned but not yet created.
+`THIRD_PARTY_LICENSES.md`) and the implementation under `App/`, `Packages/`,
+`Resources/`, and `Scripts/` all exist. `Ayah.xcodeproj` is regenerated
+from `project.yml` with XcodeGen.
 
 ---
 
@@ -696,8 +752,11 @@ Kept intentionally minimal — no speculative abstraction beyond what v1
 needs.
 
 - **`NotchController`** (App target, AppKit) — owns the `NotchPanel`
-  (`NSPanel`) lifecycle, geometry, and expand/collapse state; falls back
-  to `StatusItemController` when no notch is detected.
+  (`NSPanel`) lifecycle, geometry, and expand/collapse state; when no
+  physical notch is detected, attaches the same panel as a floating bar
+  below the menu bar instead (see §4) rather than leaving verse
+  display/prayer alerts unstarted — `StatusItemController` remains the
+  app's one Settings surface either way.
 - **`QuranRepository`** — opens `quran.sqlite` read-only; runs the
   integrity check once at init and surfaces failure as a visible error
   state rather than continuing silently; exposes `ayah(surah:ayah:)`,
@@ -713,11 +772,12 @@ needs.
 - **`PrayerCalculator`** — wraps Adhan Swift, applies the Ramadan Isha
   adjustment (§10), and pairs with `LocationRepository` for the bundled
   city dataset.
-- **`PrayerNotificationScheduler`** — the `rescheduleToday()` logic
-  described in §13.
+- **`PrayerAlertScheduler`** — computes the next in-notch prayer event,
+  arms one timer, and rearms after firing, wake, clock, time-zone, or
+  relevant settings changes (§13).
 - **`SettingsStore`** — the `AppSettings` Codable struct backing
   `UserDefaults`, publishing changes so other modules can react (e.g. a
-  city change triggers `PrayerNotificationScheduler.rescheduleToday()`).
+  city or alert-setting change triggers scheduler rearming).
 
 ### Verses per display
 
@@ -802,8 +862,8 @@ designed when reached.
   (GeoNames `cities1000` filtered to a documented Muslim-majority-country
   list, population ≥ 15,000 or a national capital), the
   `Coordinates`/`City`/`LocationRepository` models (mirroring
-  `QuranRepository`'s raw-SQLite, checksum-free-since-not-Quran-data
-  pattern), and `PrayerCalculator` wrapping Adhan Swift with the Umm
+  `QuranRepository`'s raw-SQLite read-only pattern and verifying a bundled
+  `GEONAMES_CHECKSUM`), and `PrayerCalculator` wrapping Adhan Swift with the Umm
   al-Qura Ramadan Isha adjustment (§10) applied via Hijri-calendar
   detection. Deliberately scoped to calculation only, matching this
   heading's own boundary from "Local notification scheduling" and
@@ -825,8 +885,8 @@ performance numbers, and `SECURITY.md`'s "Security posture (verified
 2026-08-22)" section for the security review's findings and evidence.
 
 **Later stages (headings only, to be detailed when reached):**
-Themes (white / beige-Mushaf / black) · Documentation pass · Release
-packaging and notarization.
+Themes (white / beige-Mushaf / black) · Developer ID/notarization if the
+project later joins the Apple Developer Program.
 
 ## Continuous integration
 
@@ -851,12 +911,7 @@ here plus the full AyahKit suite:
   import from the original source — both documented as trust-sensitive in
   `SECURITY.md`, not silently assumed solved.
 
-Note this workflow doesn't execute until the repo has real `.git` history
-and a GitHub remote — neither exists yet (see `CLAUDE.md`'s
-repository-state note) — but it's in place in the working tree so it
-starts running the moment that happens.
-
-**Still planned, not yet built**: a general `build-and-test` job
-(`xcodebuild -scheme Ayah -destination 'platform=macOS' build` plus the
-full test suite for every change, not just Quran-touching ones) — out of
-scope for the Quran-data-supply-chain-only pass that added the job above.
+The same job now builds the Release app with automatic package resolution
+disabled, using the reviewed workspace `Package.resolved`. Hosted CI still
+requires an observed GitHub run before it can be claimed operational; the
+repository files alone prove configuration, not remote execution.

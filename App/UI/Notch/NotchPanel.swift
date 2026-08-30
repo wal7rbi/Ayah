@@ -4,7 +4,7 @@ import SwiftUI
 /// Borderless, non-activating panel hosting the notch UI. Never becomes
 /// key or main so it never steals focus from whatever the user is doing.
 final class NotchPanel: NSPanel {
-    init(contentRect: NSRect, viewModel: NotchViewModel) {
+    init(contentRect: NSRect, viewModel: NotchViewModel, isPhysicalNotch: Bool) {
         super.init(
             contentRect: contentRect,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -20,7 +20,9 @@ final class NotchPanel: NSPanel {
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
-        contentView = NSHostingView(rootView: NotchContentView(viewModel: viewModel))
+        contentView = NSHostingView(
+            rootView: NotchContentView(viewModel: viewModel, isPhysicalNotch: isPhysicalNotch)
+        )
     }
 
     override var canBecomeKey: Bool { false }

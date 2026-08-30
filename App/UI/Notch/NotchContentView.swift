@@ -16,15 +16,13 @@ import SwiftUI
 /// shapes.
 struct NotchContentView: View {
     @ObservedObject var viewModel: NotchViewModel
+    let isPhysicalNotch: Bool
 
     private static let arabicFontName = "kfgqpchafsuthmanicscript-Reg"
     private static let expandedSize = CGSize(width: 480, height: 220)
 
     var body: some View {
-        let shape = Self.notchShape(
-            topRadius: viewModel.isExpanded ? 14 : 6,
-            bottomRadius: viewModel.isExpanded ? 26 : 10
-        )
+        let shape = self.shape
         return shape
             .fill(.black)
             .frame(
@@ -33,7 +31,7 @@ struct NotchContentView: View {
             )
             .overlay {
                 if viewModel.isExpanded {
-                    cardContent.transition(.opacity)
+                    cardContent.transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
                 }
             }
             .clipShape(shape)
@@ -42,6 +40,35 @@ struct NotchContentView: View {
             .onTapGesture {
                 viewModel.toggleExpanded()
             }
+            .accessibilityElement(children: viewModel.isExpanded ? .contain : .ignore)
+            .accessibilityLabel("لوحة آية")
+            .accessibilityValue(viewModel.isExpanded ? "مفتوحة" : "مطوية")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                viewModel.toggleExpanded()
+            }
+    }
+
+    /// A concave notch flare on real notch hardware; a plain flat-topped,
+    /// rounded-bottom bar on the non-notch fallback, where the panel sits
+    /// flush against the menu bar rather than flaring out of a camera
+    /// housing above it. Type-erased since both branches back the same
+    /// `shape` value used for both `.fill` and `.clipShape` below.
+    private var shape: AnyShape {
+        let topRadius: CGFloat = viewModel.isExpanded ? 14 : 6
+        let bottomRadius: CGFloat = viewModel.isExpanded ? 26 : 10
+        guard isPhysicalNotch else {
+            return AnyShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: bottomRadius,
+                    bottomTrailingRadius: bottomRadius,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+            )
+        }
+        return AnyShape(Self.notchShape(topRadius: topRadius, bottomRadius: bottomRadius))
     }
 
     private var cardContent: some View {
@@ -83,7 +110,7 @@ struct NotchContentView: View {
         // (`NotchController.notchFrame`), so card text (including tall
         // Arabic diacritics) never renders in the area the housing itself
         // occludes, whatever a given device's notch height is.
-        .padding(.top, max(20, viewModel.collapsedSize.height + 12))
+        .padding(.top, isPhysicalNotch ? max(20, viewModel.collapsedSize.height + 12) : 20)
         .padding([.horizontal, .bottom], 20)
         .frame(width: Self.expandedSize.width, height: Self.expandedSize.height)
         .animation(.easeInOut(duration: 0.35), value: viewModel.content)
@@ -128,21 +155,18 @@ struct NotchContentView: View {
             : "حان الآن وقت صلاة \(event.prayerNameArabic)"
     }
 
-    /// A small top radius (soft, not a hard square corner) and a larger
-    /// bottom radius — reads as a smooth continuation growing out of the
-    /// notch. An earlier attempt at a genuine concave "flare" curve
-    /// (custom Path with overshooting Bézier control points) measurably
-    /// failed to render as intended — verified by scanning rendered pixel
-    /// rows, the top corners came out sharp, not curved — so this
-    /// simpler, verified-correct shape is what's shipped.
-    private static func notchShape(topRadius: CGFloat, bottomRadius: CGFloat) -> UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: topRadius,
-            bottomLeadingRadius: bottomRadius,
-            bottomTrailingRadius: bottomRadius,
-            topTrailingRadius: topRadius,
-            style: .continuous
-        )
+    /// A concave top flare (ported from boring.notch's `NotchShape`, see
+    /// `NotchShape.swift`) plus a larger, convex bottom radius — reads as
+    /// the panel growing organically out of the physical notch cutout
+    /// rather than sitting below it as a plain rounded rectangle. An
+    /// earlier attempt at this same silhouette (custom Path with
+    /// overshooting Bézier control points) measurably failed to render as
+    /// intended — verified by scanning rendered pixel rows, the top
+    /// corners came out sharp, not curved; boring.notch's simpler
+    /// quad-curve construction doesn't share that failure mode and was
+    /// re-verified by screenshot before shipping here.
+    private static func notchShape(topRadius: CGFloat, bottomRadius: CGFloat) -> NotchShape {
+        NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius)
     }
 
     private func combinedText(for ayahs: [QuranAyah]) -> String {

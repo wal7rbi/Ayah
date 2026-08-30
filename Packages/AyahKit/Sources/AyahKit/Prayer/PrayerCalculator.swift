@@ -16,6 +16,12 @@ extension Madhab: @unchecked @retroactive Sendable {}
 /// needs (§9's full method list, §11's "Asr calculation" control), so a
 /// parallel wrapper enum would just be upkeep for no benefit.
 public enum PrayerCalculator {
+    /// Adhan's `.other` preset deliberately contains 0°/0° angles and is
+    /// only a starting point for callers that also supply custom angles.
+    /// Ayah has no custom-angle fields, so exposing it would produce
+    /// misleading prayer times rather than a meaningful calculation.
+    public static let supportedCalculationMethods = CalculationMethod.allCases.filter { $0 != .other }
+
     /// Computes today's five prayers plus sunrise for the given Gregorian
     /// calendar date and coordinates. Returns `nil` only in the same
     /// cases Adhan Swift's own `PrayerTimes` initializer does — solar
@@ -35,6 +41,11 @@ public enum PrayerCalculator {
         asrMadhab: Madhab,
         timeZone: TimeZone
     ) -> Adhan.PrayerTimes? {
+        guard calculationMethod != .other,
+              coordinates.latitude.isFinite, (-90...90).contains(coordinates.latitude),
+              coordinates.longitude.isFinite, (-180...180).contains(coordinates.longitude)
+        else { return nil }
+
         var parameters = calculationMethod.params
         parameters.madhab = asrMadhab
 

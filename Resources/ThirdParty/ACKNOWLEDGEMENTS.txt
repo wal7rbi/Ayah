@@ -1,0 +1,73 @@
+التراخيص والمصادر — آية
+========================
+
+آية تطبيق مستقل ومفتوح المصدر. ذكر المصادر التالية لا يعني وجود شراكة أو
+رعاية أو اعتماد أو مصادقة من أصحابها.
+
+نص القرآن الكريم — مجمع الملك فهد لطباعة المصحف الشريف
+-------------------------------------------------------
+المصدر: منصة مطوري القرآن التابعة لمجمع الملك فهد لطباعة المصحف الشريف،
+حزمة حفص بالرسم العثماني UthmanicHafs_v2-0.
+https://qurancomplex.gov.sa/quran-dev/
+
+حتى تاريخ التحقق في 2026-08-22، تتيح المنصة الرسمية تنزيل النص للمطورين لكنها
+لا تنشر ترخيصًا صريحًا يسمح بإعادة توزيع نص القرآن. يستخدم مشروع آية البيانات
+الرسمية مع توثيق هذا القصور والمخاطرة القانونية المتبقية، ولا يدّعي الحصول على
+إذن أو اعتماد خاص من المجمع.
+
+خط حفص العثماني — مجمع الملك فهد لطباعة المصحف الشريف
+-----------------------------------------------------
+الخط uthmanic_hafs_v20.ttf مأخوذ دون تعديل من الحزمة الرسمية نفسها. يحتوي ملف
+الخط على اتفاقية ترخيص مدمجة تسمح بالاستخدام والنسخ والتوزيع مجانًا مع منع بيع
+الخط أو تعديله أو إجراء الهندسة العكسية عليه. يوزع آية الخط دون تعديل.
+
+Adhan Swift — Batoul Apps
+-------------------------
+يستخدم آية مكتبة Adhan Swift 1.5.0 لحساب أوقات الصلاة محليًا دون اتصال.
+Copyright (c) 2016 Batoul Apps. Licensed under the MIT License.
+https://github.com/batoulapps/adhan-swift
+
+GeoNames
+--------
+يتضمن آية مجموعة مصفاة من بيانات المدن والإحداثيات والمناطق الزمنية من
+GeoNames.org contributors، مرخصة برخصة Creative Commons Attribution 4.0.
+https://www.geonames.org/
+https://creativecommons.org/licenses/by/4.0/
+
+
+Acknowledgements and Sources — Ayah
+===================================
+
+Ayah is an independent, open-source application. Naming the sources below does
+not imply affiliation, partnership, sponsorship, certification, or endorsement.
+
+Quran text — King Fahd Glorious Quran Printing Complex (KFGQPC)
+---------------------------------------------------------------
+Source: the KFGQPC Quran developer platform, Uthmanic Hafs package
+UthmanicHafs_v2-0: https://qurancomplex.gov.sa/quran-dev/
+
+As re-verified on 2026-08-22, the official platform makes the text available to
+developers but publishes no explicit license permitting redistribution of the
+Quran text. Ayah uses the official data with this gap and residual legal risk
+documented; it does not claim special permission or endorsement from KFGQPC.
+
+Uthmanic Hafs font — KFGQPC
+---------------------------
+uthmanic_hafs_v20.ttf is bundled unmodified from the same official package. Its
+embedded end-user license permits free use, copying, and distribution subject
+to restrictions including no sale, modification, or reverse engineering.
+
+Adhan Swift — Batoul Apps
+-------------------------
+Ayah uses Adhan Swift 1.5.0 for fully offline prayer-time calculation.
+Copyright (c) 2016 Batoul Apps. Licensed under the MIT License.
+https://github.com/batoulapps/adhan-swift
+
+GeoNames
+--------
+Ayah contains a filtered subset of city, coordinate, and time-zone data from
+GeoNames.org contributors under Creative Commons Attribution 4.0.
+https://www.geonames.org/
+https://creativecommons.org/licenses/by/4.0/
+
+See the repository's THIRD_PARTY_LICENSES.md for the complete legal record.

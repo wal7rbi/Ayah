@@ -10,5 +10,8 @@ xcuserdata/
 .build/
 .swiftpm/
 
+# Local release artifacts
+dist/
+
 # Claude Code local session state
 .claude/

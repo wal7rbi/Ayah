@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 @testable import AyahKit
 
@@ -51,6 +52,41 @@ final class QuranRepositoryTests: XCTestCase {
         }
     }
 
+    func testInitRejectsNullRequiredTextInsteadOfCrashing() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let databasePath = temporaryDirectory.appendingPathComponent("quran.sqlite").path
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(databasePath, &database), SQLITE_OK)
+        defer { sqlite3_close(database) }
+        XCTAssertEqual(sqlite3_exec(
+            database,
+            """
+            CREATE TABLE surahs(number INTEGER, name_arabic TEXT, name_transliterated TEXT, ayah_count INTEGER);
+            CREATE TABLE ayahs(id INTEGER, surah_number INTEGER, ayah_number INTEGER, juz_number INTEGER,
+                               page_number INTEGER, uthmanic_text TEXT, searchable_text TEXT);
+            INSERT INTO surahs VALUES(1, NULL, 'Al-Fatihah', 7);
+            """,
+            nil,
+            nil,
+            nil
+        ), SQLITE_OK)
+
+        let checksumPath = temporaryDirectory.appendingPathComponent("CHECKSUM")
+        try "sha256:unused".write(to: checksumPath, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(
+            try QuranRepository(databasePath: databasePath, checksumPath: checksumPath.path)
+        ) { error in
+            guard case QuranRepositoryError.corruptedColumn("surahs.name_arabic") = error else {
+                return XCTFail("Expected a corrupted-column error, got \(error)")
+            }
+        }
+    }
+
     func testFirstAyahIsAlFatihahOpening() throws {
         let repository = try makeRepository()
         let ayah = try XCTUnwrap(repository.ayah(surah: 1, ayah: 1))
@@ -66,6 +102,19 @@ final class QuranRepositoryTests: XCTestCase {
         XCTAssertNil(repository.ayah(surah: 1, ayah: 999))
         XCTAssertNil(repository.ayah(id: 0))
         XCTAssertNil(repository.ayah(id: 6237))
+    }
+
+    /// Regression test: `ayah(surah:ayah:)`/`ayah(id:)` used to force-convert
+    /// their `Int` parameters straight into `Int32` for `sqlite3_bind_int`,
+    /// which traps (crashes the process) on a value outside `Int32`'s
+    /// range. A value this large can never be a real surah/ayah/id, so it
+    /// must be treated the same as any other "no such ayah" lookup.
+    func testInt32OverflowingLookupReturnsNilInsteadOfCrashing() throws {
+        let repository = try makeRepository()
+        XCTAssertNil(repository.ayah(surah: Int.max, ayah: 1))
+        XCTAssertNil(repository.ayah(surah: 1, ayah: Int.max))
+        XCTAssertNil(repository.ayah(id: Int.max))
+        XCTAssertNil(repository.ayah(id: Int.min))
     }
 
     func testSurahsReturnsAllOneHundredFourteen() throws {

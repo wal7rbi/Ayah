@@ -129,4 +129,52 @@ final class PrayerCalculatorTests: XCTestCase {
         XCTAssertEqual(riyadhCalendar.component(.month, from: times.fajr), 6)
         XCTAssertEqual(riyadhCalendar.component(.day, from: times.fajr), 15)
     }
+
+    func testRejectsInvalidCoordinatesAndUnconfiguredOtherMethod() {
+        XCTAssertNil(PrayerCalculator.prayerTimes(
+            on: nonRamadanDate(), coordinates: Coordinates(latitude: 91, longitude: riyadhLongitude),
+            calculationMethod: .ummAlQura, asrMadhab: .shafi, timeZone: riyadhTimeZone
+        ))
+        XCTAssertNil(PrayerCalculator.prayerTimes(
+            on: nonRamadanDate(), coordinates: Coordinates(latitude: riyadhLatitude, longitude: riyadhLongitude),
+            calculationMethod: .other, asrMadhab: .shafi, timeZone: riyadhTimeZone
+        ))
+        XCTAssertFalse(PrayerCalculator.supportedCalculationMethods.contains(.other))
+    }
+
+    func testEverySupportedCalculationMethodProducesOrderedRiyadhTimes() throws {
+        for method in PrayerCalculator.supportedCalculationMethods {
+            let times = try XCTUnwrap(PrayerCalculator.prayerTimes(
+                on: nonRamadanDate(),
+                coordinates: Coordinates(latitude: riyadhLatitude, longitude: riyadhLongitude),
+                calculationMethod: method,
+                asrMadhab: .shafi,
+                timeZone: riyadhTimeZone
+            ), "Expected usable prayer times for \(method.rawValue)")
+            XCTAssertLessThan(times.fajr, times.sunrise)
+            XCTAssertLessThan(times.sunrise, times.dhuhr)
+            XCTAssertLessThan(times.dhuhr, times.asr)
+            XCTAssertLessThan(times.asr, times.maghrib)
+            XCTAssertLessThan(times.maghrib, times.isha)
+        }
+    }
+
+    func testDSTBoundaryUsesTheTargetLocationsCalendarDay() throws {
+        let newYork = TimeZone(identifier: "America/New_York")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = newYork
+        for day in [7, 8, 9] {
+            let date = calendar.date(from: DateComponents(year: 2026, month: 3, day: day, hour: 12))!
+            let times = try XCTUnwrap(PrayerCalculator.prayerTimes(
+                on: date,
+                coordinates: Coordinates(latitude: 40.7128, longitude: -74.0060),
+                calculationMethod: .northAmerica,
+                asrMadhab: .shafi,
+                timeZone: newYork
+            ))
+            XCTAssertEqual(calendar.component(.day, from: times.dhuhr), day)
+            XCTAssertLessThan(times.fajr, times.sunrise)
+            XCTAssertLessThan(times.sunrise, times.dhuhr)
+        }
+    }
 }

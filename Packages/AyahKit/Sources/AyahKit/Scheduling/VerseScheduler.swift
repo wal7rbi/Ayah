@@ -29,6 +29,15 @@ public final class VerseScheduler {
     private var timerSource: DispatchSourceTimer?
     private var onVersesSelected: (([QuranAyah]) -> Void)?
 
+    /// The error from the most recent sequential-set cursor write inside
+    /// `selectFromMemorizationSets`, or `nil` if the last one succeeded
+    /// (or none has been attempted). A failed write doesn't affect the
+    /// verses returned this cycle, but it does mean that set's walk
+    /// position silently didn't advance — it would repeat the same range
+    /// next time instead of progressing, with `try?` alone giving no way
+    /// to tell the difference from a set that's simply not due yet.
+    public private(set) var lastCursorUpdateError: Error?
+
     public init(
         quranRepository: QuranRepository,
         memorizationRepository: MemorizationRepository,
@@ -61,12 +70,14 @@ public final class VerseScheduler {
     }
 
     private func armNextTimer() {
-        let interval = max(1, settingsStore.settings.displayInterval)
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + interval, leeway: .milliseconds(0))
-        timer.setEventHandler { [weak self] in self?.fireAndRearm() }
-        timer.resume()
-        timerSource = timer
+        PerformanceSignposts.measure("VerseSchedulerRearm") {
+            let interval = max(1, settingsStore.settings.displayInterval)
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now() + interval, leeway: .milliseconds(0))
+            timer.setEventHandler { [weak self] in self?.fireAndRearm() }
+            timer.resume()
+            timerSource = timer
+        }
     }
 
     /// Picks a starting ayah — from an enabled memorization set with
@@ -76,14 +87,16 @@ public final class VerseScheduler {
     /// clamped so a display never spills past the current surah (general
     /// pool) or the memorization set's own range.
     public func selectNextVerses() -> [QuranAyah] {
-        let versesPerDisplay = max(1, settingsStore.settings.versesPerDisplay)
-        let enabledSets = memorizationRepository.fetchEnabled().filter { $0.ayahCount > 0 }
+        PerformanceSignposts.measure("VerseSelection") {
+            let versesPerDisplay = max(1, settingsStore.settings.versesPerDisplay)
+            let enabledSets = memorizationRepository.fetchEnabled().filter { $0.ayahCount > 0 }
 
-        if !enabledSets.isEmpty,
-           randomDouble() < Double(settingsStore.settings.memorizationWeightPercent) / 100 {
-            return selectFromMemorizationSets(enabledSets, versesPerDisplay: versesPerDisplay)
+            if !enabledSets.isEmpty,
+               randomDouble() < Double(settingsStore.settings.memorizationWeightPercent) / 100 {
+                return selectFromMemorizationSets(enabledSets, versesPerDisplay: versesPerDisplay)
+            }
+            return selectFromGeneralPool(versesPerDisplay: versesPerDisplay)
         }
-        return selectFromGeneralPool(versesPerDisplay: versesPerDisplay)
     }
 
     private func selectFromMemorizationSets(
@@ -110,7 +123,12 @@ public final class VerseScheduler {
 
         if set.repetitionMode == .sequential, !ayahs.isEmpty {
             let nextCursor = ayahNumber > set.endAyah ? set.startAyah : ayahNumber
-            try? memorizationRepository.updateCursor(id: set.id, cursorAyah: nextCursor)
+            do {
+                try memorizationRepository.updateCursor(id: set.id, cursorAyah: nextCursor)
+                lastCursorUpdateError = nil
+            } catch {
+                lastCursorUpdateError = error
+            }
         }
 
         return ayahs

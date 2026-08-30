@@ -21,6 +21,7 @@ struct PopoverContentView: View {
     /// `nil` when GeoNames data failed to load this launch — see
     /// `StatusItemController`.
     var onSelectCity: (() -> Void)?
+    var onShowAbout: () -> Void
     var locationRepository: LocationRepository?
 
     /// Human-labeled presets for `displayInterval` — a raw seconds field
@@ -43,62 +44,69 @@ struct PopoverContentView: View {
         .singapore: "سنغافورة",
         .tehran: "طهران",
         .turkey: "تركيا (ديانت)",
-        .other: "أخرى",
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("آية")
-                    .font(.headline)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("آية")
+                        .font(.headline)
 
-                Toggle("عرض الآيات في طرف الشاشة", isOn: $settingsStore.settings.isVerseDisplayEnabled)
+                    Toggle("عرض الآيات في طرف الشاشة", isOn: $settingsStore.settings.isVerseDisplayEnabled)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("الفاصل الزمني", selection: intervalBinding) {
-                        ForEach(Self.intervalPresets, id: \.seconds) { preset in
-                            Text(preset.label).tag(preset.seconds)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("الفاصل الزمني", selection: intervalBinding) {
+                            ForEach(Self.intervalPresets, id: \.seconds) { preset in
+                                Text(preset.label).tag(preset.seconds)
+                            }
+                        }
+
+                        Stepper(
+                            "عدد الآيات لكل عرض: \(settingsStore.settings.versesPerDisplay)",
+                            value: $settingsStore.settings.versesPerDisplay,
+                            in: 1...5
+                        )
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Stepper(
+                                "نسبة آيات الحفظ: \(settingsStore.settings.memorizationWeightPercent)%",
+                                value: $settingsStore.settings.memorizationWeightPercent,
+                                in: 0...100,
+                                step: 5
+                            )
+                            Text("احتمال اختيار الآية من مجموعات الحفظ بدلاً من القرآن كاملاً.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
+                    .disabled(!settingsStore.settings.isVerseDisplayEnabled)
+                    .opacity(settingsStore.settings.isVerseDisplayEnabled ? 1 : 0.5)
 
-                    Stepper(
-                        "عدد الآيات لكل عرض: \(settingsStore.settings.versesPerDisplay)",
-                        value: $settingsStore.settings.versesPerDisplay,
-                        in: 1...5
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Stepper(
-                            "نسبة آيات الحفظ: \(settingsStore.settings.memorizationWeightPercent)%",
-                            value: $settingsStore.settings.memorizationWeightPercent,
-                            in: 0...100,
-                            step: 5
-                        )
-                        Text("احتمال اختيار الآية من مجموعات الحفظ بدلاً من القرآن كاملاً.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
+                    if let onManageMemorizationSets {
+                        Button("إدارة مجموعات الحفظ", action: onManageMemorizationSets)
                     }
+
+                    Divider()
+                    prayerSection
+
+                    Divider()
+                    generalSection
                 }
-                .disabled(!settingsStore.settings.isVerseDisplayEnabled)
-                .opacity(settingsStore.settings.isVerseDisplayEnabled ? 1 : 0.5)
+                .padding(16)
+            }
 
-                if let onManageMemorizationSets {
-                    Button("إدارة مجموعات الحفظ", action: onManageMemorizationSets)
-                }
+            Divider()
 
-                Divider()
-                prayerSection
-
-                Divider()
-                generalSection
-
-                Divider()
+            HStack {
+                Button("حول التطبيق", action: onShowAbout)
+                Spacer()
                 Button("إغلاق آية") {
                     NSApplication.shared.terminate(nil)
                 }
             }
-            .padding(16)
+            .padding(12)
         }
         .frame(width: 320, height: 620)
         .environment(\.layoutDirection, .rightToLeft)
@@ -111,7 +119,7 @@ struct PopoverContentView: View {
                 .font(.headline)
 
             Picker("طريقة الحساب", selection: $settingsStore.settings.prayerCalculationMethod) {
-                ForEach(CalculationMethod.allCases, id: \.self) { method in
+                ForEach(PrayerCalculator.supportedCalculationMethods, id: \.self) { method in
                     Text(Self.calculationMethodLabels[method] ?? method.rawValue).tag(method)
                 }
             }
@@ -268,16 +276,15 @@ struct PopoverContentView: View {
         return locationRepository?.city(id: id)
     }
 
-    /// A bundled city carries its own IANA timezone; a raw current-location
-    /// fix doesn't (no reverse-geocoding — see `CurrentLocationProvider`'s
-    /// offline note), so that case falls back to the Mac's own system
-    /// timezone, which is already known locally with no lookup needed.
+    /// A bundled city carries its own IANA timezone. A one-shot current
+    /// location caches the Mac's IANA zone at fetch time so later travel
+    /// does not reinterpret the old coordinates on a different day.
     private var activeTimeZoneIdentifier: String {
         switch settingsStore.settings.prayerLocationSource {
         case .city:
             return selectedCity?.timeZoneIdentifier ?? TimeZone.current.identifier
         case .currentLocation:
-            return TimeZone.current.identifier
+            return settingsStore.settings.currentLocationTimeZoneIdentifier ?? TimeZone.current.identifier
         }
     }
 

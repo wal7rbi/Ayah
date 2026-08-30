@@ -148,4 +148,31 @@ final class PrayerAlertSchedulerTests: XCTestCase {
             XCTAssertEqual(delta, 86400, accuracy: 120)
         }
     }
+
+    @MainActor
+    func testClockAndTimeZoneChangesRearmTheScheduler() throws {
+        let center = NotificationCenter()
+        let scheduler = PrayerAlertScheduler(
+            quranRepository: nil,
+            locationRepository: nil,
+            settingsStore: SettingsStore(defaults: try isolatedDefaults()),
+            notificationCenter: center
+        )
+        scheduler.start { _ in }
+        let initial = scheduler.rearmGeneration
+
+        center.post(name: .NSSystemClockDidChange, object: nil)
+        XCTAssertEqual(scheduler.rearmGeneration, initial + 1)
+        center.post(name: .NSSystemTimeZoneDidChange, object: nil)
+        XCTAssertEqual(scheduler.rearmGeneration, initial + 2)
+
+        scheduler.stop()
+        let stopped = scheduler.rearmGeneration
+        center.post(name: .NSSystemClockDidChange, object: nil)
+        XCTAssertEqual(scheduler.rearmGeneration, stopped)
+    }
+
+    private func isolatedDefaults() throws -> UserDefaults {
+        try XCTUnwrap(UserDefaults(suiteName: "com.ayah.scheduler-tests.\(UUID().uuidString)"))
+    }
 }
