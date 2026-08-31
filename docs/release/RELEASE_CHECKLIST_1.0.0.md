@@ -1,15 +1,16 @@
 # Ayah 1.0.0 stable release checklist
 
-Every item below is a release blocker. Record the date, macOS version, Mac
-model, operator, result, and evidence location for each manual run before using
-`--manual-qa-approved`.
+This checklist records both the original release gates and post-publication
+acceptance. An unchecked item remains outstanding evidence and must not be
+treated as an assumed pass. Record the date, macOS version, Mac model,
+operator, result, and evidence location for each manual run.
 
 ## Automated gate
 
-- [ ] Clean release commit with annotated tag `v1.0.0`.
+- [x] Clean release commit with annotated tag `v1.0.0`.
 - [ ] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures.
 - [ ] All tests, Debug/Release builds, Quran/GeoNames verification, resource checks, arm64 check, hardened ad-hoc signature, and entitlement allowlist pass.
-- [ ] Final DMG and published download both match the `.sha256` file.
+- [x] Final DMG and published download both match the `.sha256` file.
 
 ## Supported-system matrix
 
@@ -42,15 +43,18 @@ model, operator, result, and evidence location for each manual run before using
 
 ## Published-download acceptance
 
-- [ ] GitHub release title/tag/version and uploaded filenames are exact.
-- [ ] Release notes clearly say Apple Silicon, macOS 13+, ad-hoc signed, and unnotarized.
+- [x] GitHub release title/tag/version and uploaded filenames are exact.
+- [x] Release notes clearly say Apple Silicon, macOS 13+, ad-hoc signed, and unnotarized.
 - [ ] A fresh download is quarantined and follows the documented Privacy & Security > Open Anyway path.
 - [ ] Installed app launches, requests location only after user action, opens About, and relaunches successfully.
 
 ## Release decision
 
-- Decision: **APPROVED FOR PRIVATE LIMITED RELEASE**
+- Original decision: **APPROVED FOR PRIVATE LIMITED RELEASE**
 - Operator: wal7rbi
 - Date: 2026-08-30
 - Release commit: commit referenced by annotated tag `v1.0.0`
 - Evidence: `docs/release/QA_APPROVAL_1.0.0.md`
+- Public distribution authorized by wal7rbi on 2026-08-31.
+- Current status: **PUBLISHED PUBLICLY**; the two unchecked fresh-profile
+  acceptance items above remain explicitly outstanding.

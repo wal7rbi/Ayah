@@ -7,6 +7,7 @@
 
 - أجهزة Mac بمعالجات Apple Silicon فقط.
 - macOS 13 أو أحدث.
+- افتح ملف DMG، ثم اسحب **Ayah** إلى **Applications**.
 - هذا الإصدار غير موثق لدى Apple ولا يحمل توقيع Developer ID. بعد محاولة
   الفتح الأولى استخدم إعدادات النظام > الخصوصية والأمان > فتح على أي حال.
 - تحقق من التنزيل باستخدام ملف SHA-256 المرفق قبل فتح DMG.
@@ -16,6 +17,7 @@
 يعرض قسم **حول التطبيق** مصدر نص القرآن والخط من منصة مطوري مجمع الملك فهد
 لطباعة المصحف الشريف، ويذكر Adhan Swift لحساب الصلاة وGeoNames لبيانات المدن،
 مع بيان واضح بأن آية مشروع مستقل ولا يعني ذكر المصادر وجود اعتماد أو رعاية.
+تتوفر التراخيص وبيانات المصادر داخل **حول التطبيق**.
 
 ---
 
@@ -26,6 +28,7 @@ verse display, memorization sets, and local prayer-time calculation and alerts.
 
 - Apple Silicon Macs only.
 - macOS 13 or later.
+- Open the DMG, then drag **Ayah** to **Applications**.
 - This build is not notarized and has no Apple Developer ID signature. After
   the first blocked launch, use System Settings > Privacy & Security > Open
   Anyway.
@@ -33,3 +36,4 @@ verse display, memorization sets, and local prayer-time calculation and alerts.
 
 The in-app About window credits the KFGQPC Quran text and font source, Adhan
 Swift, and GeoNames without implying affiliation, sponsorship, or endorsement.
+License and source acknowledgements are available in **About Ayah**.

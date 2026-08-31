@@ -5,12 +5,10 @@ Quran verses from the MacBook notch area, helps memorize selected verses,
 and calculates Islamic prayer times entirely offline with in-notch prayer
 alerts while the app is running.
 
-**Status: 1.0.0 stable release candidate.** The native app, AyahKit,
-offline import/verification tools, settings, memorization, prayer-time
-calculation, in-notch alerts, About credits, and unnotarized DMG packaging
-are implemented. Publication remains blocked until every item in
-`docs/release/RELEASE_CHECKLIST_1.0.0.md` passes. This release policy does
-not use an Apple Developer account, Developer ID, or notarization.
+**Status: 1.0.0 released.** Ayah is publicly available as an open-source,
+unnotarized macOS app. The release policy does not use an Apple Developer
+account, Developer ID, or notarization; review the installation steps below
+before downloading.
 
 ## Priorities
 
@@ -58,9 +56,7 @@ Security > Open Anyway** for this app. Do not disable Gatekeeper globally.
 
 [![Download Ayah for macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.0-macOS-arm64.dmg)
 
-The download button becomes active when the private GitHub Release contains
-the exactly named DMG. Repository access is still required; this button does
-not make a private release public.
+The button downloads the current DMG from Ayah's public GitHub Release.
 
 Download the accompanying `.sha256` file and verify the DMG before opening:
 
@@ -68,7 +64,11 @@ Download the accompanying `.sha256` file and verify the DMG before opening:
 shasum -a 256 -c Ayah-1.0.0-macOS-arm64.dmg.sha256
 ```
 
-The DMG contains complete Arabic and English installation instructions.
+Complete Arabic and English installation instructions remain available in
+[`docs/release/INSTALL.txt`](docs/release/INSTALL.txt). The mounted DMG keeps
+the standard uncluttered layout: drag **Ayah** to **Applications**. License and
+source acknowledgements are bundled inside the app and can be opened from
+**حول التطبيق**.
 
 ## Documentation
 
@@ -85,7 +85,7 @@ The DMG contains complete Arabic and English installation instructions.
 - **`CONTRIBUTING.md`** — ground rules, especially around the Quran data
   pipeline
 - **`docs/release/`** — the stable-release checklist, bilingual
-  installation instructions, and prepared GitHub release notes
+  installation instructions, and published GitHub release notes
 
 ## License
 

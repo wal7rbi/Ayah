@@ -64,7 +64,7 @@ done
 [ "$REHEARSAL" -eq 0 ] || [ "$MANUAL_QA_APPROVED" -eq 0 ] \
     || fail "--manual-qa-approved and --allow-dirty-rehearsal are mutually exclusive"
 
-for COMMAND in awk basename bash codesign cmp cp date ditto git grep hdiutil lipo ln mkdir mktemp plutil rm sed shasum strings tail xcodebuild; do
+for COMMAND in awk basename bash codesign cmp date ditto find git grep hdiutil lipo ln mkdir mktemp plutil rm sed shasum strings tail tr wc xcodebuild; do
     command -v "$COMMAND" >/dev/null 2>&1 || fail "required command not found: $COMMAND"
 done
 
@@ -213,12 +213,6 @@ STAGING_DIR=$WORK_DIR/dmg-root
 mkdir -p "$STAGING_DIR" || fail "could not create DMG staging directory"
 ditto "$APP_PATH" "$STAGING_DIR/Ayah.app" || fail "could not stage Ayah.app"
 ln -s /Applications "$STAGING_DIR/Applications" || fail "could not add Applications shortcut"
-cp "$REPO_ROOT/docs/release/INSTALL.txt" "$STAGING_DIR/INSTALL.txt" \
-    || fail "could not stage installation instructions"
-cp "$REPO_ROOT/LICENSE" "$STAGING_DIR/LICENSE.txt" \
-    || fail "could not stage project license"
-cp "$REPO_ROOT/THIRD_PARTY_LICENSES.md" "$STAGING_DIR/THIRD_PARTY_LICENSES.md" \
-    || fail "could not stage third-party notices"
 
 hdiutil create \
     -volname "Ayah $EXPECTED_VERSION" \
@@ -241,7 +235,10 @@ cmp -s \
     "$MOUNT_DIR/Ayah.app/Contents/Resources/ACKNOWLEDGEMENTS.txt" \
     || fail "mounted acknowledgements differ from the verified build"
 [ -L "$MOUNT_DIR/Applications" ] || fail "mounted DMG is missing the Applications shortcut"
-[ -f "$MOUNT_DIR/INSTALL.txt" ] || fail "mounted DMG is missing installation instructions"
+
+DMG_ROOT_ENTRIES=$(find "$MOUNT_DIR" -mindepth 1 -maxdepth 1 ! -name '.Trashes' ! -name '.fseventsd' | wc -l | tr -d ' ')
+[ "$DMG_ROOT_ENTRIES" -eq 2 ] \
+    || fail "mounted DMG must contain only Ayah.app and the Applications shortcut"
 
 hdiutil detach "$MOUNT_DIR" >/dev/null || fail "could not detach verification DMG"
 MOUNTED=0
