@@ -45,7 +45,8 @@ final class VerseSchedulerTests: XCTestCase {
         settings: AppSettings,
         memorizationRepository: MemorizationRepository? = nil,
         randomDouble: @escaping () -> Double = { 0 },
-        randomInt: @escaping (ClosedRange<Int>) -> Int = { $0.lowerBound }
+        randomInt: @escaping (ClosedRange<Int>) -> Int = { $0.lowerBound },
+        randomAyahSelector: (() -> QuranAyah?)? = nil
     ) throws -> (VerseScheduler, MemorizationRepository) {
         let quranRepository = try makeQuranRepository()
         let memRepo = try memorizationRepository ?? makeMemorizationRepository()
@@ -54,7 +55,8 @@ final class VerseSchedulerTests: XCTestCase {
             memorizationRepository: memRepo,
             settingsStore: try makeSettingsStore(settings),
             randomDouble: randomDouble,
-            randomInt: randomInt
+            randomInt: randomInt,
+            randomAyahSelector: randomAyahSelector ?? { quranRepository.randomAyah() }
         )
         return (scheduler, memRepo)
     }
@@ -69,6 +71,47 @@ final class VerseSchedulerTests: XCTestCase {
         XCTAssertEqual(ayahs.count, 2)
         XCTAssertEqual(ayahs[1].ayahNumber, ayahs[0].ayahNumber + 1)
         XCTAssertEqual(ayahs[1].surahNumber, ayahs[0].surahNumber)
+    }
+
+    /// Regression test for a real bug: a uniformly-random general-pool
+    /// start landing on the last ayah of a surah used to silently return
+    /// fewer ayahs than `versesPerDisplay` (and, before this fix, crash
+    /// this exact test with an out-of-range index whenever the real,
+    /// uncontrolled `QuranRepository.randomAyah()` happened to draw one).
+    /// Surah 108 (Al-Kawthar) has only 3 ayahs, so ayah 3 is its last.
+    func testGeneralPoolShiftsWindowBackwardToFitFullPassageAtSurahEnd() throws {
+        let repo = try makeQuranRepository()
+        let lastAyahOfShortSurah = try XCTUnwrap(repo.ayah(surah: 108, ayah: 3))
+
+        let (scheduler, _) = try makeScheduler(
+            settings: AppSettings(versesPerDisplay: 2, memorizationWeightPercent: 100),
+            randomDouble: { 0 }, // would always pick memorization pool if any sets existed
+            randomAyahSelector: { lastAyahOfShortSurah }
+        )
+
+        let ayahs = try XCTUnwrap(scheduler.selectNextVerses().nilIfEmpty)
+        XCTAssertEqual(ayahs.map(\.ayahNumber), [2, 3])
+        XCTAssertTrue(ayahs.allSatisfy { $0.surahNumber == 108 })
+    }
+
+    /// When the surah itself is shorter than `versesPerDisplay` (e.g. a
+    /// user-configured 5 landing in 3-ayah Al-Kawthar), there's no window
+    /// that fits — the best possible result is the whole surah, starting
+    /// at ayah 1, rather than fewer ayahs cut from wherever the random
+    /// draw happened to land.
+    func testGeneralPoolReturnsWholeSurahWhenShorterThanVersesPerDisplay() throws {
+        let repo = try makeQuranRepository()
+        let firstAyahOfShortSurah = try XCTUnwrap(repo.ayah(surah: 108, ayah: 1))
+
+        let (scheduler, _) = try makeScheduler(
+            settings: AppSettings(versesPerDisplay: 5, memorizationWeightPercent: 100),
+            randomDouble: { 0 },
+            randomAyahSelector: { firstAyahOfShortSurah }
+        )
+
+        let ayahs = try XCTUnwrap(scheduler.selectNextVerses().nilIfEmpty)
+        XCTAssertEqual(ayahs.map(\.ayahNumber), [1, 2, 3])
+        XCTAssertTrue(ayahs.allSatisfy { $0.surahNumber == 108 })
     }
 
     func testWeightZeroAlwaysUsesGeneralPoolEvenWithEnabledSets() throws {

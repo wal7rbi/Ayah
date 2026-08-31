@@ -25,6 +25,7 @@ public final class VerseScheduler {
     private let settingsStore: SettingsStore
     private let randomDouble: () -> Double
     private let randomInt: (ClosedRange<Int>) -> Int
+    private let randomAyahSelector: () -> QuranAyah?
 
     private var timerSource: DispatchSourceTimer?
     private var onVersesSelected: (([QuranAyah]) -> Void)?
@@ -43,13 +44,15 @@ public final class VerseScheduler {
         memorizationRepository: MemorizationRepository,
         settingsStore: SettingsStore,
         randomDouble: @escaping () -> Double = { Double.random(in: 0..<1) },
-        randomInt: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) }
+        randomInt: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) },
+        randomAyahSelector: (() -> QuranAyah?)? = nil
     ) {
         self.quranRepository = quranRepository
         self.memorizationRepository = memorizationRepository
         self.settingsStore = settingsStore
         self.randomDouble = randomDouble
         self.randomInt = randomInt
+        self.randomAyahSelector = randomAyahSelector ?? { quranRepository.randomAyah() }
     }
 
     public func start(onVersesSelected: @escaping ([QuranAyah]) -> Void) {
@@ -85,7 +88,13 @@ public final class VerseScheduler {
     /// `repetitionMode`, otherwise uniformly from the general pool — then
     /// gathers up to `versesPerDisplay - 1` following consecutive ayahs,
     /// clamped so a display never spills past the current surah (general
-    /// pool) or the memorization set's own range.
+    /// pool) or the memorization set's own range. For the general pool,
+    /// the starting ayah is shifted backward within its own surah (never
+    /// across a surah boundary) when the uniformly-random pick doesn't
+    /// leave room for a full `versesPerDisplay`-length passage — e.g. a
+    /// random draw landing on the last ayah of a 3-ayah surah still shows
+    /// a full passage of that surah's own ayahs, rather than silently
+    /// truncating to fewer verses than the user configured.
     public func selectNextVerses() -> [QuranAyah] {
         PerformanceSignposts.measure("VerseSelection") {
             let versesPerDisplay = max(1, settingsStore.settings.versesPerDisplay)
@@ -150,10 +159,18 @@ public final class VerseScheduler {
     }
 
     private func selectFromGeneralPool(versesPerDisplay: Int) -> [QuranAyah] {
-        guard let start = quranRepository.randomAyah() else { return [] }
+        guard let start = randomAyahSelector() else { return [] }
 
-        var ayahs = [start]
-        var ayahNumber = start.ayahNumber + 1
+        // Shift the window backward within `start`'s own surah (never
+        // across a surah boundary) so a uniformly-random pick near a
+        // surah's end still yields a full `versesPerDisplay`-length
+        // passage whenever the surah is long enough to contain one.
+        let surahAyahCount = quranRepository.surahs()
+            .first { $0.number == start.surahNumber }?.ayahCount ?? start.ayahNumber
+        let lastPossibleStart = max(1, surahAyahCount - versesPerDisplay + 1)
+        var ayahNumber = min(start.ayahNumber, lastPossibleStart)
+
+        var ayahs: [QuranAyah] = []
         while ayahs.count < versesPerDisplay,
               let next = quranRepository.ayah(surah: start.surahNumber, ayah: ayahNumber) {
             ayahs.append(next)
