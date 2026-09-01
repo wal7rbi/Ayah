@@ -29,15 +29,21 @@ final class NotchController {
         quranRepository: QuranRepository?,
         verseScheduler: VerseScheduler?,
         prayerAlertScheduler: PrayerAlertScheduler?,
-        settingsStore: SettingsStore
+        settingsStore: SettingsStore,
+        lastShownStore: LastShownStore
     ) {
         self.prayerAlertScheduler = prayerAlertScheduler
         self.viewModel = NotchViewModel(
             quranRepository: quranRepository,
             verseScheduler: verseScheduler,
             prayerAlertScheduler: prayerAlertScheduler,
-            settingsStore: settingsStore
+            settingsStore: settingsStore,
+            lastShownStore: lastShownStore
         )
+    }
+
+    func replayLastShown() {
+        viewModel.replayLastShown()
     }
 
     func attachToNotchIfAvailable() {
