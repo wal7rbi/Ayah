@@ -3,6 +3,6 @@ import XCTest
 
 final class AyahKitTests: XCTestCase {
     func testVersionMatchesStableRelease() {
-        XCTAssertEqual(AyahKit.version, "1.0.0")
+        XCTAssertEqual(AyahKit.version, "1.0.1")
     }
 }

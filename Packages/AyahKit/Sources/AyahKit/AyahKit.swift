@@ -3,5 +3,5 @@
 /// stages, kept out on purpose; Quran, Memorization, Scheduling, Settings,
 /// and Persistence are already present.
 public enum AyahKit {
-    public static let version = "1.0.0"
+    public static let version = "1.0.1"
 }
