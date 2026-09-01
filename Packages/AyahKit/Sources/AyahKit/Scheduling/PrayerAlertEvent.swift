@@ -24,6 +24,30 @@ public struct PrayerAlertEvent: Equatable, Sendable {
         self.fireDate = fireDate
         self.offsetMinutes = offsetMinutes
     }
+
+    /// One canonical mapping shared by scheduling and persisted-record
+    /// restoration, so a replay cannot acquire a different prayer label.
+    public static func prayerNameArabic(forKey key: String) -> String? {
+        switch key {
+        case "fajr": "الفجر"
+        case "dhuhr": "الظهر"
+        case "asr": "العصر"
+        case "maghrib": "المغرب"
+        case "isha": "العشاء"
+        default: nil
+        }
+    }
+
+    public init?(prayerKey: String, fireDate: Date, offsetMinutes: Int) {
+        guard let prayerNameArabic = Self.prayerNameArabic(forKey: prayerKey),
+              offsetMinutes >= 0 else { return nil }
+        self.init(
+            prayerKey: prayerKey,
+            prayerNameArabic: prayerNameArabic,
+            fireDate: fireDate,
+            offsetMinutes: offsetMinutes
+        )
+    }
 }
 
 /// `PrayerAlertEvent` plus the rotating "prayer" ayah resolved for this

@@ -23,6 +23,11 @@ never transmitted anywhere:
 - **Memorization sets** — the surah/ayah ranges you've chosen to memorize,
   their enabled/disabled state, and repetition mode. Stored in a small local
   SQLite database in Ayah's sandbox container.
+- **Last shown item** — one record for the latest verse batch or prayer
+  alert, including its original display time. Verse content is persisted as
+  Quran ayah IDs only (plus the prayer key/timing fields when applicable),
+  then read again from the verified bundled Quran database for display. Ayah
+  keeps no full display history. Stored via a separate `UserDefaults` key.
 - **The Quran text itself** — bundled read-only inside the app; never
   modified, never uploaded, never synced.
 
@@ -45,6 +50,7 @@ that local-device threat remains a documented hardening opportunity.
 - No API calls during normal use — the app has no reason to ever reach the
   network, and prayer times and Quran verses are calculated/read entirely
   offline
+- No transmission or synchronization of the last-shown record
 
 ## How this is enforced, not just promised
 

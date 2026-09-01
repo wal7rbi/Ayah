@@ -182,12 +182,12 @@ public final class PrayerAlertScheduler {
             timeZone: timeZone
         ) else { return [] }
 
-        let prayers: [(key: String, name: String, time: Date)] = [
-            ("fajr", "الفجر", times.fajr),
-            ("dhuhr", "الظهر", times.dhuhr),
-            ("asr", "العصر", times.asr),
-            ("maghrib", "المغرب", times.maghrib),
-            ("isha", "العشاء", times.isha),
+        let prayers: [(key: String, time: Date)] = [
+            ("fajr", times.fajr),
+            ("dhuhr", times.dhuhr),
+            ("asr", times.asr),
+            ("maghrib", times.maghrib),
+            ("isha", times.isha),
         ]
         var offsets: Set<Int> = [0]
         if reminderMinutes > 0 {
@@ -200,7 +200,6 @@ public final class PrayerAlertScheduler {
                 guard fireDate > now else { return nil }
                 return PrayerAlertEvent(
                     prayerKey: prayer.key,
-                    prayerNameArabic: prayer.name,
                     fireDate: fireDate,
                     offsetMinutes: offsetMinutes
                 )

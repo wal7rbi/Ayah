@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             registerBundledFonts()
             let settingsStore = SettingsStore()
+            let lastShownStore = LastShownStore()
             let quranRepository = makeQuranRepository()
             let memorizationRepository = makeMemorizationRepository()
             let locationRepository = makeLocationRepository()
@@ -28,23 +29,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 settingsStore: settingsStore
             )
 
+            let notchController = NotchController(
+                quranRepository: quranRepository,
+                verseScheduler: verseScheduler,
+                prayerAlertScheduler: prayerAlertScheduler,
+                settingsStore: settingsStore,
+                lastShownStore: lastShownStore
+            )
             statusItemController = StatusItemController(
                 settingsStore: settingsStore,
+                lastShownStore: lastShownStore,
                 quranRepository: quranRepository,
                 memorizationRepository: memorizationRepository,
-                locationRepository: locationRepository
+                locationRepository: locationRepository,
+                onReplayLastShown: { [weak notchController] in
+                    notchController?.replayLastShown()
+                }
             )
 
 #if AYAH_PERFORMANCE_AUTOMATION
             startPerformanceAutomationIfRequested()
 #endif
 
-            let notchController = NotchController(
-                quranRepository: quranRepository,
-                verseScheduler: verseScheduler,
-                prayerAlertScheduler: prayerAlertScheduler,
-                settingsStore: settingsStore
-            )
             notchController.attachToNotchIfAvailable()
             self.notchController = notchController
         }

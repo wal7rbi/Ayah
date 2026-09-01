@@ -4,13 +4,14 @@ import SwiftUI
 
 /// Standard menu-bar-utility pattern (NSStatusItem + NSPopover), present
 /// on every Mac regardless of notch availability. This is the universal
-/// Settings entry point and, on Macs without a notch, the app's only
-/// interaction surface (see ARCHITECTURE.md §4).
+/// Settings and last-shown/replay entry point on every Mac (see
+/// ARCHITECTURE.md §4).
 @MainActor
 final class StatusItemController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private let settingsStore: SettingsStore
+    private let lastShownStore: LastShownStore
     private let quranRepository: QuranRepository?
     private let memorizationRepository: MemorizationRepository?
     private let locationRepository: LocationRepository?
@@ -19,17 +20,22 @@ final class StatusItemController {
     private let aboutWindowSlot = LazySingleton<AboutWindowController>()
     private let locationViewModel: CurrentLocationViewModel
     private let launchAtLoginViewModel = LaunchAtLoginViewModel()
+    private let onReplayLastShown: () -> Void
 
     init(
         settingsStore: SettingsStore,
+        lastShownStore: LastShownStore,
         quranRepository: QuranRepository?,
         memorizationRepository: MemorizationRepository?,
-        locationRepository: LocationRepository? = nil
+        locationRepository: LocationRepository? = nil,
+        onReplayLastShown: @escaping () -> Void
     ) {
         self.settingsStore = settingsStore
+        self.lastShownStore = lastShownStore
         self.quranRepository = quranRepository
         self.memorizationRepository = memorizationRepository
         self.locationRepository = locationRepository
+        self.onReplayLastShown = onReplayLastShown
         self.locationViewModel = CurrentLocationViewModel(settingsStore: settingsStore)
 
         if let button = statusItem.button {
@@ -45,20 +51,29 @@ final class StatusItemController {
             ? { [weak self] in self?.showCityPicker() }
             : nil
         let onShowAbout: () -> Void = { [weak self] in self?.showAboutWindow() }
+        let onReplay: () -> Void = { [weak self] in self?.replayLastShown() }
 
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 320, height: 620)
         popover.contentViewController = NSHostingController(
             rootView: PopoverContentView(
                 settingsStore: settingsStore,
+                lastShownStore: lastShownStore,
                 locationViewModel: locationViewModel,
                 launchAtLoginViewModel: launchAtLoginViewModel,
                 onManageMemorizationSets: onManageMemorizationSets,
                 onSelectCity: onSelectCity,
+                onReplayLastShown: onReplay,
                 onShowAbout: onShowAbout,
-                locationRepository: locationRepository
+                locationRepository: locationRepository,
+                quranRepository: quranRepository
             )
         )
+    }
+
+    private func replayLastShown() {
+        popover.performClose(nil)
+        onReplayLastShown()
     }
 
     @objc private func togglePopover() {

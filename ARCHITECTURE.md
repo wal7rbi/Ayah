@@ -629,6 +629,7 @@ not the app is sandboxed.
 | Quran text (`quran.sqlite`) | Read-only bundled SQLite | Immutable, large enough to want indexed lookup/search, never mutated |
 | Location data (`cities_filtered.sqlite`) | Read-only bundled SQLite | Same reasoning, small |
 | App settings | `UserDefaults` (Codable struct) | Handful of scalars, no relational shape, no migration ceremony needed |
+| Last shown item | Dedicated `UserDefaults` key (versioned Codable record) | Exactly one compact record; Quran ayah IDs rather than duplicated Quran text |
 | Memorization sets | Small local SQLite (`ayah_user.sqlite`) | Genuinely list-like, relational, user-editable over time |
 
 SwiftData was considered and rejected for v1: it requires macOS 14+, above
@@ -778,6 +779,21 @@ needs.
 - **`SettingsStore`** — the `AppSettings` Codable struct backing
   `UserDefaults`, publishing changes so other modules can react (e.g. a
   city or alert-setting change triggers scheduler rearming).
+- **`LastShownStore`** — the separate, shared, observable source of truth
+  for exactly one latest verse batch or prayer alert. It persists ordered
+  ayah IDs, prayer timing fields, and the original display timestamp, never
+  Quran text. `NotchDisplayContent.resolve` re-fetches those identifiers
+  through `QuranRepository` for both the menu-bar card and popup replay;
+  invalid references hide the card and make replay a no-op.
+
+The Settings popover renders “آخر ما ظهر” above the existing settings when
+that shared record resolves successfully. “إعادة العرض” closes the transient
+popover and invokes `NotchViewModel`'s existing expand-and-12-second-collapse
+path. On physical-notch Macs this expands the existing notch panel; in
+fallback mode the existing `isExpanded` subscription shows the top-center
+panel. Restoring a record at launch supplies collapsed content only: it never
+auto-opens, and replay never rewrites the original `shownAt` timestamp. No
+history beyond the single replacement record is retained.
 
 ### Verses per display
 

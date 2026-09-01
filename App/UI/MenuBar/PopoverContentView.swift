@@ -7,12 +7,12 @@ import SwiftUI
 /// the shared `SettingsStore` that `VerseScheduler`/`PrayerCalculator`
 /// already read live, so changes here take effect without a relaunch.
 /// Text and layout are Arabic/RTL throughout, matching the app's primary
-/// audience — there is no separate English variant to maintain. Also the
-/// app's only interaction surface on Macs without a notch (see
-/// ARCHITECTURE.md §4) — verse content itself still isn't shown there (a
-/// separate, deliberate gap tracked outside this stage).
+/// audience — there is no separate English variant to maintain. The
+/// leading last-shown card is also the persistent replay surface on every
+/// Mac, including machines using the non-notch fallback panel.
 struct PopoverContentView: View {
     @ObservedObject var settingsStore: SettingsStore
+    @ObservedObject var lastShownStore: LastShownStore
     @ObservedObject var locationViewModel: CurrentLocationViewModel
     @ObservedObject var launchAtLoginViewModel: LaunchAtLoginViewModel
     /// `nil` when memorization data failed to load this launch — see
@@ -21,8 +21,12 @@ struct PopoverContentView: View {
     /// `nil` when GeoNames data failed to load this launch — see
     /// `StatusItemController`.
     var onSelectCity: (() -> Void)?
+    var onReplayLastShown: () -> Void
     var onShowAbout: () -> Void
     var locationRepository: LocationRepository?
+    var quranRepository: QuranRepository?
+
+    private static let arabicFontName = "kfgqpchafsuthmanicscript-Reg"
 
     /// Human-labeled presets for `displayInterval` — a raw seconds field
     /// isn't a friendly control for this.
@@ -50,6 +54,11 @@ struct PopoverContentView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    if let lastShownContent {
+                        lastShownSection(content: lastShownContent)
+                        Divider()
+                    }
+
                     Text("آية")
                         .font(.headline)
 
@@ -111,6 +120,79 @@ struct PopoverContentView: View {
         .frame(width: 320, height: 620)
         .environment(\.layoutDirection, .rightToLeft)
         .multilineTextAlignment(.trailing)
+    }
+
+    private var lastShownContent: NotchDisplayContent? {
+        NotchDisplayContent.resolve(
+            lastShownStore.record,
+            quranRepository: quranRepository
+        )
+    }
+
+    @ViewBuilder
+    private func lastShownSection(content: NotchDisplayContent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("آخر ما ظهر")
+                    .font(.headline)
+                Spacer()
+                if let shownAt = lastShownStore.record?.shownAt {
+                    Text(Self.relativeTimestamp(shownAt))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            switch content {
+            case .none:
+                EmptyView()
+            case .verses(let ayahs, let surah):
+                Text(ayahs.map(\.uthmanicText).joined(separator: " "))
+                    .font(.custom(Self.arabicFontName, size: 18))
+                    .lineLimit(5)
+                    .minimumScaleFactor(0.6)
+                Text(Self.reference(for: ayahs, surah: surah))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .prayerAlert(let event, let ayah, let surah):
+                Text("صلاة \(event.prayerNameArabic)")
+                    .font(.subheadline.weight(.semibold))
+                Text(Self.prayerAlertMessage(for: event))
+                    .font(.caption)
+                if let ayah {
+                    Text(ayah.uthmanicText)
+                        .font(.custom(Self.arabicFontName, size: 17))
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.6)
+                    Text(Self.reference(for: [ayah], surah: surah))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button("إعادة العرض", action: onReplayLastShown)
+        }
+    }
+
+    private static func relativeTimestamp(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "ar")
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private static func prayerAlertMessage(for event: PrayerAlertEvent) -> String {
+        event.isReminder
+            ? "توضأ واستعد.. باقي \(event.offsetMinutes) دقائق على الأذان"
+            : "حان الآن وقت صلاة \(event.prayerNameArabic)"
+    }
+
+    private static func reference(for ayahs: [QuranAyah], surah: Surah?) -> String {
+        guard let first = ayahs.first, let last = ayahs.last else { return "" }
+        let range = first.ayahNumber == last.ayahNumber
+            ? "\(first.ayahNumber)"
+            : "\(first.ayahNumber)-\(last.ayahNumber)"
+        return "\(surah?.nameArabic ?? String(first.surahNumber)) — \(range)"
     }
 
     private var prayerSection: some View {
