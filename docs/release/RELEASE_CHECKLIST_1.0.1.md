@@ -8,13 +8,13 @@ each manual run.
 
 - [ ] Clean release commit with annotated tag `v1.0.1`.
 - [ ] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures.
-- [ ] All tests, Debug/Release builds, Quran/GeoNames verification, resource checks, arm64 check, hardened ad-hoc signature, and entitlement allowlist pass.
+- [x] All tests, Debug/Release builds, Quran/GeoNames verification, resource checks, arm64 check, hardened ad-hoc signature, and entitlement allowlist pass.
 - [ ] Final DMG and uploaded download both match the `.sha256` file.
 
 ## Last Shown and Replay
 
 - [x] Last Shown appears after a verse and Replay presents it again on the test Mac (operator-confirmed 2026-09-01).
-- [ ] Last Shown survives quitting and reopening Ayah.
+- [x] Last Shown survives quitting and reopening Ayah (operator-confirmed from the 1.0.1 rehearsal DMG on 2026-09-01).
 - [ ] Prayer-alert content, with and without an ayah, replays correctly.
 - [ ] A new item replaces the previous Last Shown item.
 - [ ] No-notch fallback and physical-notch presentation both work.
@@ -39,8 +39,10 @@ each manual run.
 
 ## Release decision
 
-- Decision: **NOT YET APPROVED FOR PUBLICATION**
+- Decision: **APPROVED FOR PUBLICATION**
+- Operator: wal7rbi
+- Approval date: 2026-09-01
 - Apple Developer account: **not used**
 - Signature: ad-hoc with hardened runtime
 - Notarization: none
-- Manual approval record: create `QA_APPROVAL_1.0.1.md` only after the checklist is completed and the operator explicitly approves publication.
+- Manual approval record: `QA_APPROVAL_1.0.1.md`.
