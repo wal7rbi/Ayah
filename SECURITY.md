@@ -25,7 +25,7 @@ review against a built app rather than a design intent — see
   for the opt-in "use current location" prayer-time convenience; see
   `PRIVACY.md`'s "Location" section). Confirmed against the actual signed
   binary, not just the source entitlements file. Debug builds may include
-  `com.apple.security.get-task-allow`; the 1.0.0 Release configuration sets
+  `com.apple.security.get-task-allow`; the 1.0.1 Release configuration sets
   `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`, and the packaging gate requires
   the final ad-hoc-signed app to contain exactly the sandbox and location
   keys. Any debug or network entitlement fails packaging. Hardened runtime
@@ -109,7 +109,7 @@ review against a built app rather than a design intent — see
   (`1.5.0`, commit `a6fa2de...`) rather than a floating branch — see
   `THIRD_PARTY_LICENSES.md`.
 
-**Deliberately not part of the 1.0.0 distribution policy**: Developer ID
+**Deliberately not part of the 1.0.1 distribution policy**: Developer ID
 signing and Apple notarization require an Apple Developer Program account.
 Ayah instead produces an arm64, hardened-runtime, ad-hoc-signed DMG and
 documents macOS's per-app Privacy & Security > Open Anyway flow. The fresh,

@@ -17,7 +17,7 @@ Required:
 
 Stable mode:
   --manual-qa-approved       Assert the manual stable-release checklist passed.
-                             Requires a clean tree at annotated tag v1.0.0.
+                             Requires a clean tree at annotated tag v1.0.1.
 
 Rehearsal mode:
   --allow-dirty-rehearsal   Permit a dirty tree and run shortened resource
@@ -68,8 +68,8 @@ for COMMAND in awk basename bash codesign cmp date ditto find git grep hdiutil l
     command -v "$COMMAND" >/dev/null 2>&1 || fail "required command not found: $COMMAND"
 done
 
-EXPECTED_VERSION=1.0.0
-EXPECTED_BUILD=1
+EXPECTED_VERSION=1.0.1
+EXPECTED_BUILD=2
 EXPECTED_TAG=v$EXPECTED_VERSION
 REVISION=$(git -C "$REPO_ROOT" rev-parse HEAD) || fail "could not resolve HEAD"
 WORKTREE_STATUS=$(git -C "$REPO_ROOT" status --porcelain)

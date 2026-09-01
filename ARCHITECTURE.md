@@ -14,7 +14,7 @@ This began as the research-stage design and now records both implemented
 decisions and explicitly marked history. The app target, AyahKit, bundled
 datasets, import/verification tools, settings, memorization, prayer-time
 calculation, in-notch alerts, About/source credits, and unnotarized DMG
-packaging exist. Version 1.0.0 intentionally targets Apple Silicon and does
+packaging exist. Version 1.0.1 intentionally targets Apple Silicon and does
 not use Developer ID or notarization; the stable artifact remains gated on
 the hardware/accessibility checklist in `docs/release/`.
 
@@ -659,7 +659,7 @@ addition beyond the base sandbox entitlement. It's opt-in at the UI level
 or any other entitlement; verify with `codesign -d --entitlements :-` on
 the built app after touching anything here, same as before.
 
-The 1.0.0 Release configuration is arm64-only and disables Xcode's base
+The 1.0.1 Release configuration is arm64-only and disables Xcode's base
 entitlement injection. Release packaging requires an ad-hoc signature with
 hardened runtime and exactly the sandbox/location entitlement pair; a
 `get-task-allow` or network entitlement is a hard failure. Because there is
