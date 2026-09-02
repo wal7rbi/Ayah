@@ -1,109 +1,141 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) working in this repository.
+
+**How to update this file.** Describe what is true now. If a change makes a
+sentence here wrong, edit that sentence — do not append a paragraph explaining
+that the old one used to be right. This file was an append-only build narrative
+until 2026-09-01 and grew to four times its current size, carrying claims that
+later work had already contradicted. That narrative now lives in
+`docs/history/BUILD_LOG.md` as a frozen record; git carries the rest. Nothing
+here should be dated, and nothing should describe a sequence of events.
 
 ## Project
 
-Ayah is a privacy-first, fully offline native macOS app (Swift/SwiftUI/AppKit) that displays Quran verses from the MacBook notch area, supports verse memorization, and calculates offline Islamic prayer times with in-notch prayer alerts. No Hadith, no backend, no accounts, no network access by architecture (App Sandbox with no `network.client` entitlement). Full rationale for every technical decision — minimum OS version, notch-geometry approach, Quran data licensing, prayer-calculation library, persistence choices, entitlements — lives in `ARCHITECTURE.md`; read it before making an architectural change instead of re-deriving decisions already made there. `THIRD_PARTY_LICENSES.md` documents a deliberately accepted licensing risk on the bundled Quran **text** (KFGQPC data with no published redistribution license) — do not "fix" this by silently swapping the source without raising it, since it was an explicit product decision. The bundled Quran **font** is a separate question and is not part of this risk: as of the 2026-08-22 Quran supply-chain hardening pass (see below), the font carries an End-User License Agreement embedded in its own file metadata that explicitly permits Ayah's unmodified bundling/registration — see `THIRD_PARTY_LICENSES.md`.
+Ayah is a privacy-first, fully offline native macOS app (Swift/SwiftUI/AppKit).
+It shows Quran verses in the MacBook notch, supports verse memorization, and
+calculates Islamic prayer times offline with in-notch prayer alerts. No Hadith,
+no backend, no accounts, and no network access by architecture: the App Sandbox
+entitlements do not include `network.client`, and no networking API appears
+anywhere in the source.
 
-**Repository state**: this is an active Git repository with generated
-`Ayah.xcodeproj` metadata. Preserve dirty working-tree changes, use
-`xcodegen generate` after changing `project.yml` or adding app resources,
-and never commit SwiftPM `.build/` or Xcode DerivedData output.
+The app is Arabic-only. Every user-facing surface applies
+`.environment(\.layoutDirection, .rightToLeft)` at its root. There is no English
+variant and new UI should not introduce one. The single exception is
+`AboutView`'s attribution block, which is intentionally English and
+left-to-right.
 
-**Audit status (2026-08-23)**: the current implementation and dirty working
-tree were reviewed repository-wide. GeoNames now has a required bundle
-checksum; SQLite readers fail closed on corrupt rows; settings and
-memorization values are bounded; one-shot location requests have explicit
-cancellation/timeout behavior; and prayer alerts rearm on clock/time-zone
-changes. See `docs/audits/2026-08-23-ayah-codebase-audit-v1.md`.
+`ARCHITECTURE.md` holds the rationale for every technical decision — minimum OS
+version, notch geometry, data sourcing and licensing, prayer library,
+persistence, entitlements, performance budget. Read the relevant section before
+changing an architectural decision rather than re-deriving it.
 
-## Build order / current stage
+Preserve dirty working-tree changes, and never commit SwiftPM `.build/` or Xcode
+DerivedData output.
 
-The project is built in explicit stages (see "Phased build order" in `ARCHITECTURE.md`) — do not jump ahead and implement a later stage's features without being asked. Stages 1–6, Settings, memorization-set management, in-notch prayer alerts, launch-at-login, performance measurement, security review, documentation, and the public `v1.0.0` release are complete. The remaining optional product heading is themes; Developer ID signing and notarization remain future work only if the project later joins the Apple Developer Program.
+## Current state
 
-Stage 3 shipped a schema trimmed from `ARCHITECTURE.md`'s original draft — KFGQPC's real export doesn't include `hizb_quarter`/`ruku_number`/`manzil_number`/`sajda`/translated surah names/`revelation_place`/`revelation_order`, and no in-scope feature needs them yet, so they were deliberately dropped rather than pulling in a second data source; see `ARCHITECTURE.md` §7 and `Resources/Quran/SOURCE.md` before assuming those fields exist.
+The app is feature-complete for its scope: notch and menu-bar UI, Quran
+display, memorization sets, prayer times, in-notch prayer alerts,
+launch-at-login, last-shown replay, a non-notch fallback bar, a hardened Quran
+data pipeline, and both test suites. `v1.0.1` is the latest published release;
+`MARKETING_VERSION` is `1.0.2`, whose notes are in
+`docs/release/RELEASE_NOTES_1.0.2.md` and which has not been packaged or
+published yet.
 
-Stage 4 added `Resources/Fonts/uthmanic_hafs_v20.ttf` (KFGQPC Uthmanic Hafs, PostScript name `kfgqpchafsuthmanicscript-Reg`), registered at launch via `CTFontManagerRegisterFontsForURL(_:.process:_)` in `AppDelegate` rather than `Info.plist`'s `ATSApplicationFontsPath` — process-scoped registration side-steps needing to know whether a bundled resource ends up flattened or folder-nested. `QuranRepository` verifies the bundled database's integrity once at init (via `QuranIntegrityChecker`, the same checksum algorithm as `Scripts/verify_quran`); `AppDelegate` surfaces a failure as a blocking `NSAlert` rather than silently showing nothing, per `ARCHITECTURE.md` §8. The non-notch popover fallback does not yet show verse content (`StatusItemController`/`PopoverContentView` were Settings-placeholder-only at this point) — a known, deliberate gap at the time, not an oversight; the popover gained a real Settings UI later, see below, but still doesn't render verse text.
+Two things are not built and should not be started without being asked:
+**themes** (white / beige-Mushaf / black), the one remaining optional product
+heading; and **Developer ID signing and notarization**, relevant only if the
+project joins the Apple Developer Program — Release builds are ad-hoc signed
+today.
 
-Stage 5 replaced Stage 4's fixed-interval placeholder timer with `VerseScheduler` (`Packages/AyahKit/Sources/AyahKit/Scheduling/`): a self-rearming `DispatchSourceTimer` (armed only for the next event, ~10% leeway, per `ARCHITECTURE.md` §18) that weighted-selects between enabled memorization sets (`MemorizationRepository`, CRUD over `memorization_sets` in a local, mutable `ayah_user.sqlite` at the app's Application Support container, opened via the new `Persistence/SQLiteConnection` — deliberately separate from `QuranRepository`'s read-only raw-SQLite calls, since one is checksum-verified bundled data and the other is user-editable state) and the general 6236-ayah pool, per `memorizationWeightPercent`. `selectNextVerses()` is a pure, synchronous, fully unit-tested function (randomness injected via closures — no timer sleeps in tests); `start(onVersesSelected:)` is the thin timer layer on top. A new minimal `Settings` module (`AppSettings`/`SettingsStore`) backs the scheduler's tunables via `UserDefaults`, deliberately scoped to only the Quran-display fields this stage needs (display interval, verses per display, memorization weight) — Prayer/Notification/Theme settings are still later stages' job, not anticipated here. `NotchViewModel`/`NotchContentView` now carry `currentAyahs: [QuranAyah]` instead of a single ayah, rendering up to `versesPerDisplay` consecutive ayahs as one continuous passage (joined text, a "start-end" reference range) rather than always exactly one — verified by running the built app and clicking the notch to expand it, showing a real two-ayah batch (e.g. "الإنسان 19-20"). At the time Stage 5 shipped there was no Settings UI or memorization-set management UI yet, so `VerseScheduler` always fell back to the general pool — both have since been built; see the next paragraph.
+One task is outstanding rather than assumed done: the curated Arabic city-name
+table (`ArabicNameOverrides.swift`) still owes a native-speaker review. Its doc
+comment records what it covers and what it deliberately leaves in Latin.
 
-**Settings UI and memorization-set management** filled that gap. `PopoverContentView` (`App/UI/MenuBar/`) is now a real form, not a placeholder, bound to a single `SettingsStore` instance that `AppDelegate` constructs once in `applicationDidFinishLaunching` and shares with `VerseScheduler` — previously each consumer created its own `SettingsStore`, and because two separate instances backed by the same `UserDefaults` key don't reactively observe each other, a settings UI writing to one would never have live-updated the other. The same one-shared-instance rule now applies to `MemorizationRepository` (`AppDelegate.makeMemorizationRepository()`), passed to both `VerseScheduler` and the new `MemorizationSetsWindowController` — edits made in the management UI take effect on the next scheduled display with no extra plumbing, since `VerseScheduler.selectNextVerses()` re-queries the repository fresh on every timer fire rather than caching. `isVerseDisplayEnabled` (declared in `AppSettings` since Stage 5 but never actually read until now) is wired up live: `NotchViewModel` subscribes to `settingsStore.$settings` via Combine and starts/stops the scheduler as the toggle changes. Memorization-set CRUD lives in a new `App/UI/Memorization/` (`MemorizationSetsWindowController` / `MemorizationSetsView` / `MemorizationSetEditorView`), opened from the Settings popover into a plain titled/closable/resizable `NSWindow` rather than another `NSPopover` — a transient popover auto-dismisses on outside click, which breaks a multi-field add/edit form. All of this UI is Arabic-only, with `.environment(\.layoutDirection, .rightToLeft)` applied at each view's root — there is no English variant, and any future settings surface (prayer/notification/theme) should follow the same convention rather than introducing English. The set editor deliberately only ever creates `.sequential`-mode sets: `MemorizationSet.RepetitionMode.random` still exists and is exercised by `VerseSchedulerTests`, but isn't offered as a UI choice, since picking it would shuffle away the order a user is trying to memorize in — don't wire it back into the editor without checking first, per this file's usual pattern for deliberate gaps. `MemorizationSetsView.row(for:)` originally selected a row via `.onTapGesture` — see the Architecture section's note on why that's unreliable on macOS; it wasn't hit here only because rows are opened via tap-to-edit, not exercised as heavily as `CityPickerView`'s later did. It was a latent bug at the time, not a proven-safe pattern to copy — since fixed, see "`MemorizationSetsView.row(for:)`'s latent `.onTapGesture` bug is now fixed" below.
+## Repository layout
 
-**Notch auto-expand/collapse** closed a gap in the Settings UI stage above: `ARCHITECTURE.md` §3 always specified expand/collapse firing on "a verse becoming due, or a user click," but `NotchViewModel.showVerses()` only ever updated `currentAyahs`/`currentSurah` — nothing set `isExpanded`, so a new verse changed silently underneath a collapsed bar and only a manual tap ever revealed it. Fixed by having `showVerses()` expand the notch and arm a cancellable `autoCollapseTask` (a `Task.sleep` for a fixed hold, `NotchViewModel.autoCollapseDelay`) that collapses it again; manual taps now route through `toggleExpanded()` rather than mutating `isExpanded` directly, so a click cancels any pending auto-collapse instead of racing it. Alongside this, `PopoverContentView`'s interval presets moved from short testing values (30s-30min) to real display cadences (15min/30min/1hr/2hr/3hr), and `VerseScheduler.armNextTimer()`'s `DispatchSourceTimer` leeway dropped from ~10% (§18's original wakeup-coalescing rationale) to 0 — at a 15min-3hr cadence a single wakeup's coalescing benefit is negligible next to a user expecting the display at exactly their chosen interval, not up to 18 minutes late on the 3-hour preset; `ARCHITECTURE.md` §18 was updated to record this supersession.
+```
+App/                     Xcode app target — AppKit/SwiftUI only
+  UI/{Notch,MenuBar,Memorization,Prayer,About,Settings}/
+  UI/LayoutMetrics.swift Sizes that two files must agree on
+Packages/AyahKit/        Local SPM package — all business logic
+  Sources/AyahKit/{Quran,Prayer,Memorization,Scheduling,Settings,Persistence,Launch,Diagnostics}/
+  Tests/AyahKitTests/    Fast, headless suite (swift test)
+Tests/App/               App-hosted suite (xcodebuild test)
+Resources/{Quran,GeoNames,Fonts,ThirdParty}/           Committed generated data
+Scripts/{import_quran,verify_quran,import_geonames}/   Independent SPM packages
+docs/{history,audits,performance,release,plans}/
+```
 
-**Stage 6 (prayer time calculation)** added `Packages/AyahKit/Sources/AyahKit/Prayer/{Coordinates,City,LocationRepository,PrayerCalculator}.swift` and a new `Scripts/import_geonames` package (same shape as `Scripts/import_quran`: its own `Package.swift`, no third-party deps beyond `SQLite3`) that filters GeoNames' `cities1000` dump to a documented v1 "Muslim-majority countries" list (`MuslimMajorityCountries.swift` — 49 ISO codes, criterion and list both in-file) and a population-or-capital threshold, producing the committed `Resources/GeoNames/{cities_filtered.sqlite, SOURCE.md}` (4,654 cities, ~376 KB — within §12's "tens to low hundreds of KB" target). `LocationRepository` mirrors `QuranRepository`'s raw-SQLite pattern (bundled, read-only, cached-at-init) rather than `Persistence/SQLiteConnection` — this data just doesn't get Quran's checksum ceremony (§8), since city lookup isn't the app's #1 correctness priority. `PrayerCalculator` wraps Adhan Swift (`AyahKit`'s first third-party dependency, added to `Package.swift`), reusing Adhan's own `CalculationMethod`/`Madhab` enums directly in its public API rather than mirroring them in a parallel wrapper type — both are already exactly what a future settings picker needs (see the Architecture section for the `Sendable`-conformance and module-name-shadowing wrinkles that come with that choice). It independently detects Ramadan via `Calendar(identifier: .islamicUmmAlQura)` and adds the +30 minute Isha extension Umm al-Qura's civil convention calls for (§10), since Adhan Swift has no Hijri awareness and won't do this itself. Deliberately scoped to calculation only, matching `ARCHITECTURE.md`'s own stage boundary: `PrayerCalculator.prayerTimes(on:coordinates:calculationMethod:asrMadhab:)` is a pure static function taking its parameters explicitly rather than reading `AppSettings` — nothing here was wired into `AppSettings`, any UI, or notification scheduling yet at this point, since those are separate later headings ("Settings UI", "Local notification scheduling"). The UI followed in the next paragraph.
-
-**Prayer settings UI** extended the Settings popover to cover Stage 6's `PrayerCalculator`/`LocationRepository`, the same way the Quran Settings UI stage above completed `VerseScheduler`. `AppSettings` gained `prayerCalculationMethod`/`asrMadhab` (Adhan Swift's own enums, stored directly — see the Architecture section for why they needed a retroactive `Sendable` conformance) and `selectedCityID: Int?`. `PopoverContentView` gained an "أوقات الصلاة" section (calculation-method picker, the Asr picker specifically labeled "حساب العصر" per ARCHITECTURE.md §11 rather than "المذهب", a city row, and today's five prayers + sunrise computed live via `PrayerCalculator`) wrapped in a `ScrollView` since the popover's original 300×340 no longer fit everything — grown to 320×620 (see the Architecture section: this is the same duplicated-constant caveat as the notch's `expandedSize`). City selection is a new `App/UI/Prayer/{CityPickerView,CityPickerWindowController}.swift` window (not a picker in the popover — ~4,650 bundled cities is too many for a plain `Picker`), following `MemorizationSetsWindowController`'s plain-`NSWindow`-not-`NSPopover` pattern, with the same `.onAppear`-isn't-reliable-here caveat (cities loaded in `CityPickerView.init`).
-
-**Real bug found and fixed during manual verification** (driving the built app via AppleScript/Accessibility, not just reading code): `CityPickerView`'s row selection originally used `.contentShape(Rectangle()).onTapGesture { onSelect(city) }` on each row's content, copying `MemorizationSetsView.row(for:)`'s exact pattern. It silently never fired — confirmed by hand, repeatedly, clicking directly on rows via Accessibility (AX inspection showed the click correctly landing inside the row) with zero effect. Fixed by wrapping each row's content in a `Button { onSelect(city) } label: { ... }.buttonStyle(.plain)` instead — see the Architecture section for the root cause and why `Button` is the reliable idiom here. **`MemorizationSetsView.row(for:)` used the identical `.onTapGesture` pattern and was not touched here (out of scope for this change) — it had the same latent bug; since fixed the same way, see "`MemorizationSetsView.row(for:)`'s latent `.onTapGesture` bug is now fixed" further down.**
-
-**City names now display in Arabic where GeoNames has one.** Caught by the user looking at a screenshot of the running city picker and asking why everything was in English — `City.name`/`cities_filtered.sqlite`'s `name` column was always GeoNames' primary field, which is transliterated Latin for most Arabic-speaking-country entries ("Riyadh", not "الرياض"), and this had been flagged as a known, deliberately-deferred gap since Stage 6 rather than fixed then (no city-picker UI existed yet to need it). Fixing it properly (not just cosmetically) meant going back to `Scripts/import_geonames`: `ArabicNames.swift` reads GeoNames' `alternateNamesV2` dump pre-filtered to `isolanguage == "ar"` rows (the raw dump is 19M rows/778MB worldwide — see the `awk` prep command below — pre-filtering keeps the importer itself fast) and picks one Arabic name per city (historic entries excluded; GeoNames' own `isPreferredName` flag preferred; else the shortest non-colloquial candidate, which reliably favors "الشارقة" over "إمارة الشارقة" [Emirate of Sharjah]). Coverage is ~33% of the bundled 4,654 cities (1,529) — GeoNames' own alternate-name sparseness, not an import bug — so `City.nameArabic: String?` is genuinely optional and `City.displayName` (`nameArabic ?? name`) is the one fallback rule every UI site should use rather than reimplementing `?? name` itself. One accepted data-quality caveat, documented rather than silently swallowed: a handful of `isolanguage == "ar"` entries for Afghanistan are actually Dari/Pashto text using Perso-Arabic letters GeoNames mistagged as Arabic (e.g. "گردیز" for Gardez, which uses گ — not a letter in the Arabic alphabet) — filtering these out reliably would need per-entry language judgment beyond what this importer does; low-volume enough to accept, the same way other upstream-data imprecisions are documented elsewhere in this file rather than hidden.
-
-**"Use current location" as a prayer-time input** closed ARCHITECTURE.md §12's explicitly deferred "Location Services could be added later as an explicit, opt-in convenience feature." `AppSettings.prayerLocationSource` (new `PrayerLocationSource` enum, default `.city`) switches the Settings popover's "أوقات الصلاة" section between the existing city picker and a new `Prayer/CurrentLocationProvider.swift` (AyahKit) one-shot `CLLocationManager.requestLocation()` fetch, triggered only by an explicit tap of "استخدام الموقع الحالي" — never automatically and never on a recurring timer, matching §18's no-continuous-background-work priority. The fetch result is cached in `AppSettings.currentLocationCoordinates`/`currentLocationFetchedAt` and reused across launches until the user taps again to refresh; `App/UI/Prayer/CurrentLocationViewModel.swift` is the thin `@MainActor` glue (mirroring `NotchViewModel`'s shape) that owns the `CurrentLocationProvider` instance, writes into the shared `SettingsStore`, and surfaces fetch errors (e.g. permission denied) back to the popover. This is the one place in Ayah where the "fully offline" claim needs an explicit caveat, and it's disclosed rather than glossed over: Macs have no GPS chip, so location resolution goes through macOS's own `locationd` via nearby Wi-Fi access points, which can involve network traffic *outside* Ayah's sandboxed process even though Ayah's own entitlements still never include `network.client` — confirmed post-change via `codesign -d --entitlements :-` on the built app. The current-location UI carries this disclosure as caption text directly in the popover; see the Architecture section for the new `com.apple.security.personal-information.location` entitlement this required. Because there's no reverse-geocoding (`CLGeocoder` itself isn't offline, so it's deliberately not used), a current-location fix has no city name or bundled IANA timezone the way a picked city does — the popover falls back to `TimeZone.current` (the Mac's own system timezone, already known with no lookup) for that case only. Verified end-to-end by running the built app and clicking through both segments of the popover's new "مصدر الموقع" control via Accessibility automation — the city-mode and current-location-mode UI (including the disclosure caption and the distinct empty-state prompts) both render correctly; the real permission-prompt/fetch itself is an interactive system dialog and was deliberately left for the user to trigger themselves rather than automated through.
-
-**Prayer notifications** built ARCHITECTURE.md §13's "Local notification architecture" (previously just a heading) as `Packages/AyahKit/Sources/AyahKit/Notifications/PrayerNotificationScheduler.swift`, the module `ARCHITECTURE.md`'s own "Module responsibilities" section had already named. `AppSettings` gained `arePrayerNotificationsEnabled` (off by default — an explicit opt-in, same precedent as `prayerLocationSource`, since turning it on triggers a `UNUserNotificationCenter` authorization prompt) and `prayerNotificationReminderMinutes` (0/5/10/15 in the Settings UI's new "تنبيه أوقات الصلاة" toggle + "التنبيه قبل الصلاة بـ" picker, appended to `PopoverContentView`'s prayer section after the existing prayer-times block). One notification per prayer — Fajr/Dhuhr/Asr/Maghrib/Isha, sunrise excluded since it isn't a prayer — scheduled via `UNCalendarNotificationTrigger` with explicit `DateComponents` (including an explicit `timeZone`, per §13), never `UNTimeIntervalNotificationTrigger`. Split the same way `VerseScheduler` splits pure selection logic from its timer: `PrayerNotificationScheduler.notificationRequests(for:coordinates:calculationMethod:asrMadhab:leadMinutes:timeZoneIdentifier:now:)` is `nonisolated`, pure, and fully unit-tested (`PrayerNotificationSchedulerTests.swift` — sunrise exclusion, already-passed-prayers filtering, lead-time offset math, cross-day identifier uniqueness); `rescheduleToday()` (the actual `UNUserNotificationCenter` scheduling) isn't unit-tested, the same way `VerseScheduler`'s `DispatchSourceTimer` firing isn't. `PrayerNotificationScheduler` itself is `@MainActor` (needed for the same Swift 6 sending-closure reason `CurrentLocationProvider` was — see the Architecture section) and self-contained: `start()` (called once from `AppDelegate`, alongside the existing `VerseScheduler`/`StatusItemController` construction) subscribes to `settingsStore.$settings`, whose `@Published` publisher replays its current value to a new subscriber — covering §13's "app launch" trigger for free, no separate explicit call needed — and reschedules again on every later settings change (deliberately not narrowed to just calculation-method/Asr/city/toggle, since reacting to all of them is simpler and a redundant reschedule is cheap/idempotent); a self-rearming `DispatchSourceTimer` mirroring `VerseScheduler`'s display timer covers the local-midnight rollover. Cancellation only ever touches Ayah's own previously-scheduled requests (identifiers prefixed `ayah.prayer.`), never a blanket `removeAllPendingNotificationRequests()`, matching §13's "cancel only Ayah's own" wording even though nothing else in the app schedules notifications today. No entitlement or `Info.plist` key was needed for this feature (unlike the location feature above) — `UNUserNotificationCenter` requires only runtime authorization, not a sandbox entitlement; confirmed via `codesign -d --entitlements :-` showing no change. Verified end-to-end by running the built app, toggling "تنبيه أوقات الصلاة" on via Accessibility automation, and confirming both the lead-minutes picker appeared and — the real proof it's wired through, not just UI — macOS's own "Ayah Notifications" system permission banner appeared, meaning `rescheduleToday()` → `requestAuthorization` actually fired; the Allow/Don't Allow decision itself was left for the user, same as the location permission prompt above.
-
-**Launch at login** built ARCHITECTURE.md §14 exactly as specified: `Packages/AyahKit/Sources/AyahKit/Launch/LaunchAtLoginManager.swift` wraps `SMAppService.mainApp` behind a `LaunchAtLoginControlling` protocol (mirroring `LocationProviding`'s testability-via-fake shape), `@MainActor` for the same reason `CurrentLocationProvider`/`PrayerNotificationScheduler` are. Deliberately **no new `AppSettings` field** — unlike every other toggle in the popover, `SMAppService.mainApp.status` (macOS's own Login Items list, independently user-editable from System Settings) is itself the persistent source of truth, so mirroring it into `UserDefaults` would just create a second copy that could drift out of sync; `App/UI/Settings/LaunchAtLoginViewModel.swift` re-reads `status` on demand (`refresh()`, called by `StatusItemController.togglePopover()` right before showing the popover) rather than caching it across opens. The popover's new "عام" section (`PopoverContentView.generalSection`, placed after the prayer section, before the Quit button) shows a single toggle bound through a computed `Binding<Bool>` rather than directly to a stored property, since the real state is a three-or-four-case `SMAppService.Status` enum, not a bool — `.enabled` and `.requiresApproval` both read as "on" (the app-side `register()` call already succeeded in the `.requiresApproval` case; showing the toggle off would misrepresent what happened), and `.requiresApproval` additionally surfaces a caption plus a "فتح إعدادات تسجيل الدخول" button wired to `SMAppService.openSystemSettingsLoginItems()`. No new entitlement or `Info.plist` key needed (confirmed via `codesign -d --entitlements :-` showing no diff from before) — `SMAppService.mainApp` registers/unregisters from within App Sandbox with no special entitlement, unlike the location feature's `personal-information.location` key. Verified end-to-end by running the built app and clicking the toggle via Accessibility automation (see the Architecture section's AppleScript notes: the popover's content lives under `pop over 1 of menu bar 2`, not `window 1` of the process, and clicking by raw screen coordinates derived from a screenshot was more reliable than walking the accessibility tree) — macOS's own "Login Item Added" system banner appeared on enable, the checkbox's AX value flipped 1→0 on a second click to disable, and `codesign`/entitlement output was re-checked clean throughout.
-
-**Performance measurement** ran the §18 budget against a real build rather than adding new code — the "Later stages" list's "Performance optimization and measurement" heading, unlike every other item there, already had a fully-written target (§18) with nothing further to design, just to check. Built **Release**, not Debug (`-configuration Release`) — Debug's `-Onone` isn't representative of real CPU numbers. Idle CPU: sampled via `top -l 15 -s 2 -pid <pid> -stats pid,cpu,mem` over a 30s window after a brief post-launch settle, landing at a flat **0.0%** (one ~4.4% blip only in the first couple seconds after launch — SwiftUI's first layout pass / `QuranIntegrityChecker`'s checksum verification, not idle behavior) — comfortably inside the ~0.1–1% target. Memory: `vmmap --summary`'s "Physical footprint" (the number Activity Monitor actually shows) read **13.5MB steady-state / 16.2MB peak**, well inside "low tens of MB" — deliberately *not* `ps`'s RSS column, which read ~90MB here; that's `ps` double-counting shared-framework pages mapped into the process (a known macOS RSS-accounting artifact, not a real per-process cost), and using it instead would have made an already-lean app look like it was blowing its budget 3-4x over. Disk-write behavior (§18's "no continuous or periodic disk activity while idle") was *not* independently traced live this pass — that would need `fs_usage` under `sudo`, deliberately not reached for — verified instead by code inspection matching the design already in place: `SettingsStore.save()` only runs from its `didSet`, `VerseScheduler` re-queries `MemorizationRepository` without writing on every timer fire, and `MemorizationRepository` only writes on explicit user edits via the management UI. Results recorded in `ARCHITECTURE.md` §18's new "Measured" addendum (with the specific hardware/OS the numbers came from — a measurement without that context isn't reproducible or comparable later). No code changed as part of this pass; if a future measurement finds a real regression, fix it there rather than here.
-
-**`MemorizationSetsView.row(for:)`'s latent `.onTapGesture` bug is now fixed**, closing the gap flagged since the Settings UI stage above and left open in `CityPickerView`'s own fix. Same root cause, same fix: the row's tappable content (`rangeLabel`/repetition-mode `VStack`) is now wrapped in `Button { editorTarget = .edit(set) } label: { ... }.buttonStyle(.plain)` instead of `.contentShape(Rectangle()).onTapGesture { ... }` — the enabled `Toggle` and the delete `Button` alongside it were already reliable AppKit controls and were left as-is. Verified the same way as `CityPickerView`'s fix, not just by reading the diff: ran the built app, opened the memorization-sets window via Accessibility automation, and clicked a row — accessibility inspection now shows the click resolving to `button 1 of UI element 1 of row 1 of outline 1`, and the "تعديل مجموعة الحفظ" edit sheet opens, where before the tap silently did nothing. The Architecture section's "SwiftUI `List` + `.onTapGesture`" note has been updated to match — there is no longer a known copy-this-pattern-at-your-peril row left in the app.
-
-**First security review** scoped out `ARCHITECTURE.md`'s "Security review" later-stage heading at the user's explicit choice between it and "Themes" — see `SECURITY.md`'s "Security posture (verified 2026-08-22)" section for the full write-up with command output, and `PRIVACY.md` for the doc fix described below. This was a review-and-verify pass, not new features: built both Debug and local-Release configurations and confirmed via `codesign -d --entitlements :-` that the signed binary carries exactly the two entitlements `Ayah.entitlements` declares (`app-sandbox`, `personal-information.location`) plus the expected-at-this-stage `get-task-allow` (present because these are locally/ad-hoc signed builds, not yet Developer-ID-signed — re-check once "Release packaging and notarization" happens) — confirming hardened runtime is already on and no entitlement has silently crept in beyond what's reviewed in source. Read every raw-SQLite call site across `Persistence/SQLiteConnection.swift`, `Quran/QuranRepository.swift`, `Prayer/LocationRepository.swift`, and `Memorization/MemorizationRepository.swift`: all caller-supplied values go through `sqlite3_bind_*` on a prepared statement, and the only string-interpolated SQL anywhere is a handful of private `static let` column-list constants, never a parameter — no reachable SQL-injection path from any UI input. A repo-wide grep for networking APIs (`URLSession`, `NWConnection`, raw sockets, etc.) across `App/` and `Packages/AyahKit/Sources` returned zero matches, reinforcing that the missing `network.client` entitlement isn't the only thing standing between this app and the network — nothing in the code even tries.
-
-The one real finding: **`PRIVACY.md` had drifted out of date against two already-shipped features.** Its "Location" section still read as if the current-location opt-in (built well before this review — see "'Use current location' as a prayer-time input" above) didn't exist yet, and its "App preferences" bullet claimed a "launch-at-login toggle... Stored via `UserDefaults`" that was never true — per "Launch at login" above, that state deliberately lives only in `SMAppService.mainApp.status` (macOS's own Login Items list), specifically *to avoid* a second copy in `UserDefaults`. Both are now fixed: "Location" describes the opt-in flow, the one-shot-fetch/no-continuous-tracking behavior, and the Wi-Fi/`locationd` offline caveat explicitly (matching the in-app disclosure caption rather than contradicting it); "App preferences" now lists cached current-location coordinates/fetch-time separately and drops the incorrect launch-at-login claim. A privacy document silently falling out of sync with the code it describes is exactly the kind of thing `PRIVACY.md`'s own "Questions" section calls "a bug, not a matter of opinion" — treat any future feature touching `AppSettings`/entitlements as carrying an implicit obligation to re-check `PRIVACY.md` and `SECURITY.md` for staleness, not just to ship the feature.
-
-**Prayer alerts moved from macOS system notifications into the notch itself**, replacing "Prayer notifications" above rather than extending it — a deliberate product decision, not a bug fix (triggered by diagnosing why alerts weren't firing: `UNUserNotificationCenter` permission for Ayah was Off at the OS level, and separately, the actual desired behavior turned out to be a notch popup like the verse display, not a system banner at all). `Packages/AyahKit/Sources/AyahKit/Notifications/PrayerNotificationScheduler.swift` and its tests are deleted outright; `Packages/AyahKit/Sources/AyahKit/Scheduling/{PrayerAlertEvent,PrayerAlertScheduler}.swift` replace it, colocated with `VerseScheduler` as a peer self-rearming scheduler rather than kept in a `Notifications/` folder that no longer applies. Unlike the OS-owned design, there's no handoff left to hand firing off to: `PrayerAlertScheduler.armNextTimer()` computes today+tomorrow's reminder/at-time events fresh on every arm (via `prayerAlertEvents(...)`, the same pure "what to show" split `notificationRequests(...)` used, now returning a `PrayerAlertEvent` instead of pre-baked notification text — no identifier/day-key needed either, since nothing is ever registered with the OS to dedupe against), takes the single soonest one, and arms exactly one `DispatchSourceTimer` for it — firing invokes the callback then immediately rearms for the next. No dedicated midnight timer exists any more; recomputing fresh each arm naturally rolls into tomorrow once today's events are exhausted, and the one real gap that leaves — an already-armed deadline passing while the Mac is asleep — is covered by `NotchController` rearming on `NSWorkspace.didWakeNotification`, not a periodic timer. `AppSettings.arePrayerNotificationsEnabled`/`prayerNotificationReminderMinutes` are reused unchanged (same toggle/picker in `PopoverContentView`, no new settings), but turning the toggle on no longer triggers any OS permission prompt — alerts are shown entirely in-process.
-
-**Last shown and replay** adds one shared `LastShownStore` created by `AppDelegate` and injected into both menu-bar and notch controllers. Its dedicated, versioned `UserDefaults` record holds only ordered ayah IDs or prayer-key/timing/optional-ayah-ID fields plus the original display timestamp — never Quran text and never more than one item. `NotchDisplayContent.resolve` is the single restoration path for the popover card, launch restoration, and replay; it re-fetches every referenced ayah through the verified `QuranRepository` and fails closed if a required row is unavailable. Launch restoration sets collapsed content without displaying it. The popover's “إعادة العرض” action closes the popover and calls the same `expandAndAutoCollapse()` path as newly scheduled content, preserving the existing 12-second physical-notch/fallback behavior without changing `shownAt` or creating history.
-
-Each card (reminder and at-time alike) shows the prayer name, a short Arabic message ("توضأ واستعد.. باقي 5 دقائق على الأذان" before; "حان الآن وقت صلاة العصر" at-time), and a Quran ayah containing "الصلاة" that rotates every firing — `QuranRepository` gained `randomAyah(searchableTextContains:)` for this, filtering `searchable_text` (never `uthmanic_text`, which structurally can't substring-match a plain-spelled word like this — Uthmani orthography interleaves diacritics between every consonant and renders "اة" endings as a dagger-alef on a preceding و, confirmed empirically: `LIKE '%صلاة%'` against `uthmanic_text` returns zero rows, against `searchable_text` returns 63 ayahs across 40 surahs) but still returning/displaying that row's `uthmanic_text`, per this file's own display-text rule. `PrayerAlertScheduler` resolves the ayah at fire time and bundles it into the callback payload, matching the existing split where schedulers own "what to show" and the view model just republishes. `NotchViewModel`'s `currentAyahs`/`currentSurah` were replaced with one `@Published content: NotchDisplayContent` enum (`.none`/`.verses`/`.prayerAlert`) rather than a second parallel optional — `VerseScheduler` and `PrayerAlertScheduler` are two independent timers that can each fire while the notch is already expanded showing the other's content, and the enum makes "exactly one active kind" true by construction instead of needing an ad hoc priority rule. Both card types share the same top safe-zone padding and 12-second auto-collapse. Non-notch Macs get no fallback for this, matching the verse-display feature's own existing gap and ARCHITECTURE.md §4's "one interaction pattern to maintain" philosophy — the scheduler is only ever started from `NotchController.attachToNotchIfAvailable()`, so it structurally never runs at all without a notch. Verified end-to-end by running the built app with a temporarily-injected synthetic `now:` closure (reverted before finishing) to force a near-term firing without waiting hours for a real prayer time: confirmed via screenshot that the notch auto-expands showing the prayer name, reminder text, and ayah with a correctly-formatted reference line, and that a second firing shows a different ayah (Al-Anfal 3, then An-Nur 56) — proving the rotation. `ARCHITECTURE.md` §13 and `PRIVACY.md`'s "Notifications" section have since been updated to match this in-notch design (both now correctly describe it, not the old OS-notification mechanism) — the note that once flagged this as outstanding is now stale and has been removed here.
-
-**A full security/performance/offline/lightweight audit** (at the user's request, informed by reading every file in `App/`/`Packages/AyahKit/` plus targeted web research against official Apple docs and community sources) found and fixed two real bugs beyond the "First security review" pass above, which had missed both. **Bug 1**: the "استخدام الموقع الحالي" (use current location) flow was silently broken — `CurrentLocationProvider.requestOneShotLocation()` calls `requestWhenInUseAuthorization()`, but `Info.plist` only declared the legacy `NSLocationUsageDescription` key, not `NSLocationWhenInUseUsageDescription`, which that specific API requires; per Apple's docs, the system silently ignores the request without it — no dialog, no delegate callback — so the `CheckedContinuation` never resumed and `CurrentLocationViewModel.fetchCurrentLocation()`'s spinner hung forever. The "First security review" pass above had actually cited the wrong key as evidence this flow was reviewed and correct (see `SECURITY.md`'s now-corrected "No unnecessary permissions" bullet) — a case of reviewing the code's evident intent rather than checking the actual OS requirement. Fixed by adding `NSLocationWhenInUseUsageDescription` (same Arabic disclosure text) alongside the existing key; verified against a freshly built app via Accessibility automation — the real macOS "Ayah would like to use your current location" system dialog now appears (it did not before), carrying that disclosure text. **Bug 2**: `PrayerCalculator.prayerTimes(...)` determined which Gregorian day to compute via `Calendar(identifier: .gregorian)`'s implicit `TimeZone.current` — the Mac's system timezone — rather than the selected city's own timezone (`City.timeZoneIdentifier`, already known, never threaded through); Adhan Swift's own source interprets the passed date components via a UTC-based calendar internally, so the caller must supply year/month/day as experienced at the target location. Anyone whose system timezone differed from their selected prayer city — the diaspora/travel case the bundled ~4,650-city dataset exists for — could get prayer times and prayer-alert firing times computed for the wrong day. Fixed by adding a required `timeZone: TimeZone` parameter to `PrayerCalculator.prayerTimes(...)` (also applied to `isRamadan`'s own Ramadan detection, which had the identical bug) and threading the correct zone through from `PopoverContentView.todaysPrayerTimes` and `PrayerAlertScheduler.resolveLocation()`/`armNextTimer()` — see `ARCHITECTURE.md` §9's "Update" for the full technical rationale. Verified via a new regression test in `PrayerCalculatorTests.swift` that overrides `NSTimeZone.default` to a far-away zone and confirms the result is unchanged — confirmed to actually fail against the pre-fix code (reverted the fix locally, reran just that test, saw it fail with the exact wrong-day symptom, then restored the fix) before trusting it as a real regression guard, not a plausible-looking assertion. All 46 `AyahKitTests` pass; `xcodebuild` Debug build succeeds; `codesign -d --entitlements :-` on the freshly built app confirms entitlements are unchanged (still exactly `app-sandbox` + `personal-information.location`, no drift from either fix).
-
-**Quran data supply-chain hardening** (2026-08-22, at the user's explicit request after asking how to guarantee every ayah stays unchanged) built out the full chain of trust from KFGQPC's official archive to the runtime check that already existed — source verification, a machine-readable manifest, tampering-detection tests, CI, and a Release build gate — rather than adding a second layer on top of the existing checksum alone. **Licensing was re-verified first, as a gate before any implementation**, per the user's explicit instruction to stop and report rather than assume: the font turned out to be genuinely licensed (an End-User License Agreement is embedded directly in `Resources/Fonts/uthmanic_hafs_v20.ttf`'s own metadata — found via `strings`, not on any webpage — granting free Use/Copy/Distribute; confirmed byte-identical, via a fresh re-download, to the font inside KFGQPC's official package), correcting `THIRD_PARTY_LICENSES.md`'s previous "None published" entry for it. The Quran **text** licensing gap is unchanged (still no published redistribution terms anywhere KFGQPC controls, re-checked more thoroughly than before — the platform page, the contact page, and this time also the downloaded package's own `read.me` and raw CSV/SQL/JSON/XML exports) — the user explicitly chose to keep accepting that already-documented risk rather than resource the text, so nothing about the bundled Quran text itself changed.
-
-`Scripts/import_quran` now takes the whole downloaded KFGQPC archive rather than a pre-extracted CSV: it computes the archive's MD5/SHA-1 and hard-fails if they don't match the values KFGQPC publishes on the same download page (an upstream identity check, not a security primitive Ayah chose), computes its own SHA-256, extracts the CSV itself via `/usr/bin/unzip -p` (no new dependency), and — new — writes a machine-readable `Resources/Quran/MANIFEST.json` alongside the existing `VERSION`/`CHECKSUM`/`SOURCE.md`, carrying the authority/source hashes/importer version/dataset checksums with deliberately no timestamp field (a timestamp would harm reproducibility for no benefit). While making this change, the one identified non-determinism source — an `ISO8601DateFormatter`-derived `generated_at` value previously written into `quran.sqlite`'s own `meta` table — was removed (kept only in the unhashed `SOURCE.md`); empirically verified via two consecutive runs against the same archive producing byte-for-byte identical `quran.sqlite` output, not just an identical content checksum. `Scripts/verify_quran` gained a `MANIFEST.json` cross-check (counts, checksum, and a freshly recomputed file-bytes SHA-256 of `quran.sqlite` itself), reusing the same tool for both CI and the new Release gate rather than inventing a second checker.
-
-The actual `Resources/Quran/{quran.sqlite,VERSION,CHECKSUM,SOURCE.md,MANIFEST.json}` were regenerated once, through this new pipeline, against a freshly downloaded copy of the exact same official archive already cited in the old `SOURCE.md` (its SHA-256 matched exactly, confirming nothing upstream had changed) — **the resulting `CHECKSUM` came out byte-for-byte identical to what was already committed** (`sha256:6511c557765a5b1b1e7b67464746c5021a867a66de42673925fac6178a3634e5`), which is the strongest available proof that hardening the pipeline didn't alter a single ayah. `Packages/AyahKit/Tests/AyahKitTests/QuranTamperingTests.swift` is new (9 tests): copies of the real bundled database are tampered (single-byte text change, truncation, swapped for a structurally-valid-but-undersized replacement) and confirmed to be rejected through the actual `QuranRepository.init`/`QuranIntegrityChecker.verify` code paths — never a reimplemented check, never the real file itself — plus pure fixture-based tests of `QuranIntegrityChecker.verify`'s checksum/count logic in isolation, and a read-only-enforcement test confirming a raw `UPDATE` fails at the SQLite level. Sanity-checked, not just written: temporarily disabled the checksum guard and confirmed the two checksum-dependent tests actually failed (everything else stayed green, as expected), then restored it. `.github/workflows/quran-integrity.yml` runs `verify_quran` plus the full AyahKit suite on every push/PR, with a provenance guard blocking a PR that changes `quran.sqlite` without also updating `VERSION`/`CHECKSUM`/`MANIFEST.json` together. `project.yml` gained a `preBuildScripts` phase running the same `verify_quran` + `swift test` pair, but only for `$CONFIGURATION = Release` (checked via `$CONFIGURATION` in the script) — confirmed via both a Debug build (gate skipped, message logged) and a Release build (gate ran, passed, `MANIFEST.json`/`SOURCE.md`/`VERSION` confirmed still excluded from the bundled `Contents/Resources/` the same way as before, entitlements re-confirmed unchanged via `codesign -d --entitlements :-`). `SECURITY.md` gained a full "Quran data supply-chain trust model" section spelling out what each layer (KFGQPC authority, official MD5/SHA-1, Ayah's SHA-256, the deterministic importer, tampering tests, CI, code signing, runtime verification) actually proves and doesn't — including, verbatim, that a checksum does not prove Quran text is religiously authoritative, only that it's identical to an already-approved source. `ARCHITECTURE.md` §5–§8 and the "Continuous integration" section were updated to match all of the above; `CONTRIBUTING.md` and this file's own documented `import_quran` command were updated for the new CLI shape. Sigstore/GitHub Artifact Attestations were deliberately not added — documented in `SECURITY.md` as a future layer targeting the final `.app`/`.zip`/`.dmg`, not built this pass. All 55 `AyahKitTests` pass; `xcodebuild` Debug and Release builds both succeed.
-
-**Notch shape ported from TheBoredTeam/boring.notch** (2026-08-30, at the user's explicit request to match that project's design) replaces `NotchContentView`'s `UnevenRoundedRectangle` with a new `App/UI/Notch/NotchShape.swift` — a genuine concave top flare (adapted from boring.notch's own shipped `NotchShape.swift`), so the panel now reads as growing organically out of the physical camera housing rather than sitting below it as a plain rounded rectangle, matching boring.notch's signature silhouette. This is the same concave silhouette an earlier Ayah attempt tried and abandoned (a custom Path with overshooting Bézier control points that rendered the top corners sharp instead of curved, per the now-superseded comment this replaced) — boring.notch's construction uses simple quadratic curves instead of that cubic-overshoot approach, a different algorithm that doesn't share the old failure mode. `NotchContentView`'s content-appear transition also now matches boring.notch's own (`.scale(scale: 0.8, anchor: .top).combined(with: .opacity)` in place of a plain `.opacity` fade). Only the chrome (shape, corner-radius animation, content transition) was ported, not boring.notch's actual panels (tab bar, music player, calendar, shelf) — those don't have an Ayah analogue, since Ayah's notch content is verse/prayer-alert display only, not media control. Verified two ways: `xcodebuild` Debug build succeeds, and — since this shell has no Screen Recording permission to confirm visually via a real screenshot the way past notch-UI work in this file did — a standalone offscreen-rendering harness (`NotchShape`'s exact shipped `path(in:)`, rasterized into a `CGContext` bitmap, not a reimplementation) sampled the top-left corner's pixel edge across multiple rows and confirmed it tracks the analytical quadratic-Bézier curve (~10.6 total deviation across 11 sampled rows) far more closely than a straight 45° chamfer would (~239 total deviation) — i.e., confirmed as a smooth curve, not the old sharp-corner failure. A drop shadow when expanded (boring.notch has one) was deliberately not added this pass — it would need reserved shadow padding around `NotchController`/`NotchContentView`'s duplicated `expandedSize` constant (see the Architecture section's note on that duplication) to avoid clipping, a window-geometry change beyond a style-only port.
-
-**Verse display and prayer alerts on Macs without a notch** (2026-08-30, at the user's explicit request to plan and build this) closed the exact gap this file previously documented as deliberate: `NotchController.attachToNotchIfAvailable()` used to be a true no-op when `notchedScreen()` found no notch, and since that guard was the *only* place `VerseScheduler.start(...)`/`PrayerAlertScheduler.start(...)` were ever called, both features silently never ran at all on non-notch hardware — the popover Settings surface never showed verse text or a prayer alert either. `NotchController.attachToNotchIfAvailable()` now picks one of two paths once, at attach time: `attachPhysicalNotch(on:)` (today's existing behavior, unchanged) or a new `attachFallbackBar()` when no notch is found, which reuses the exact same `NotchPanel`/`NotchViewModel`/`NotchContentView` — same Uthmanic-font verse card, same prayer-alert card, same 12-second auto-collapse — as a borderless floating panel pinned to the top-center of the primary screen, positioned via `screen.visibleFrame.maxY` (excludes the menu bar strip) so it sits flush below the menu bar rather than over it. Both schedulers now start from this path exactly as they do from the physical-notch path — the whole point was feature parity, not a lesser fallback. Two deliberate visual differences from the physical notch, both driven by a new `NotchContentView.isPhysicalNotch` flag threaded down from `NotchPanel`: a plain flat-topped, rounded-bottom `UnevenRoundedRectangle` instead of `NotchShape`'s concave flare (there's no camera housing here to flare out of), and the panel is ordered on/off screen with `viewModel.$isExpanded` rather than left visible as an always-there collapsed pill (there's nothing for a permanent floating pill to blend into on this class of Mac) — `NotchController` subscribes to that publisher and calls `orderFrontRegardless()`/`orderOut(nil)` accordingly. `NotchViewModel` needed no changes at all — it was already fully notch-agnostic state. Switching modes while already running (e.g. a notched MacBook entering clamshell mode with only an external display attached) is explicitly out of scope, matching the physical-notch path's own existing `screenParametersChanged()` scope boundary. See ARCHITECTURE.md §4 (rewritten to cover both the Settings-popover fallback and this new content fallback) and §13 (its "non-notch Macs get no fallback for prayer alerts" line, now false, is corrected). Verified end-to-end on this actual dev Mac, which turns out to have no physical notch itself — so this was a real fix for real local behavior, not just a simulated test: `xcodebuild` Debug build succeeds, all 98 `AyahKitTests` pass unaffected (nothing under `AyahKit` changed), and running the built app produced a real screenshot showing the floating bar appear centered below the menu bar with correct Uthmanic-font ayah text and reference line moments after launch (verse display fires immediately on `VerseScheduler.start`), then disappear again after the 12-second auto-collapse window with no persistent pill left behind. `codesign -d --entitlements :-` reconfirmed the same three entitlements as before (`app-sandbox`, `get-task-allow`, `personal-information.location`) — no drift, since this only repositions an existing panel.
+**Anything that does not need AppKit belongs in `AyahKit`**, so it stays
+testable with plain `swift test`. Only window, panel, and status-item management
+belongs in `App/`. When adding a module, default to `AyahKit` unless it directly
+manipulates `NSWindow`/`NSPanel`/`NSScreen`.
 
 ## Commands
 
-The project is split into an Xcode app target (`App/`) and a local Swift package (`Packages/AyahKit/`) for business logic. They are built/tested independently.
+**Regenerate the Xcode project** after editing `project.yml` or adding any new
+source file under `App/` or `Tests/App/`. XcodeGen enumerates files at generate
+time, so a brand-new `.swift` file — even inside an already-referenced directory
+— is silently excluded from the build, with no error explaining why, until this
+is re-run:
 
-**Regenerate the Xcode project** after editing `project.yml`, or after adding any new source file under `App/` (the project is generated via `xcodegen`, not hand-edited in Xcode's project editor for structural changes). XcodeGen enumerates files at generate-time rather than watching folders, so a brand-new `.swift` file — even inside an already-referenced directory — silently isn't part of the build (no build error explains why) until this is re-run:
 ```
 xcodegen generate
 ```
 
 **Build the app**:
+
 ```
 xcodebuild -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' build
 ```
 
-**Build/test the AyahKit package** (this is where all unit tests currently live — there is no `xcodebuild test` action wired up for the App scheme):
-```
-cd Packages/AyahKit
-swift build
-swift test
-```
+**Test.** There are two suites and they run differently.
 
-**Run a single test**:
 ```
+cd Packages/AyahKit && swift test
 swift test --filter AyahKitTests.QuranIntegrityTests/testChecksumMatches
 ```
 
-**Run the built app** (it's an `LSUIElement` app — no Dock icon, so quit it via its menu-bar popover's "Quit Ayah" button, not Cmd-Q):
+```
+xcodebuild test -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' -configuration Debug
+```
+
+The second runs `Tests/App` (the `AyahTests` target, covering `NotchViewModel`'s
+state machine). It is app-hosted: XCTest injects it into a real `Ayah` process,
+which is why `Bundle.main` inside it is the real app bundle and tests needing
+real ayahs can read the bundled `quran.sqlite`. It is also why
+`AppDelegate.applicationDidFinishLaunching` stands down under XCTest — without
+that, the app would open its panel, start both schedulers, and write to the
+user's real preferences underneath the suite. `AppLaunchGuardTests` keeps that
+guard honest. Add `-only-testing:AyahTests/NotchViewModelTests/<name>` to run
+one test.
+
+**Run the built app.** It is an `LSUIElement` app with no Dock icon; quit it
+from the menu-bar popover's "إغلاق آية" button, not Cmd-Q.
+
 ```
 open $(xcodebuild -project Ayah.xcodeproj -scheme Ayah -showBuildSettings 2>/dev/null | awk -F'= ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')/Ayah.app
 ```
 
-**Re-run the Quran import pipeline** (only needed if re-importing from a newer/different KFGQPC export — `Resources/Quran/` is otherwise a committed, generated artifact; never hand-edit it). Each is its own small SPM package under `Scripts/`, independent of `AyahKit`. Since the 2026-08-22 supply-chain hardening pass, the importer takes the whole downloaded archive (not a pre-extracted CSV) plus the official MD5/SHA-1 values copied from KFGQPC's own download page — it verifies the archive against those, extracts the CSV itself, and computes its own SHA-256 (no more manually typing a `--source-sha256`):
+**Check entitlements** on a built app, to verify no network-client entitlement
+ever creeps in:
+
+```
+codesign -d --entitlements :- <path-to>/Ayah.app
+```
+
+### Re-running the data importers
+
+`Resources/Quran/` and `Resources/GeoNames/` are committed, generated artifacts.
+Never hand-edit them; re-run the importer instead.
+
+**Quran.** Takes the whole downloaded KFGQPC archive plus the official MD5/SHA-1
+from KFGQPC's own download page, verifies the archive against those, extracts
+the CSV itself, and writes `quran.sqlite`, `VERSION`, `CHECKSUM`, `SOURCE.md`,
+and `MANIFEST.json` together as a matched set:
+
 ```
 cd Scripts/import_quran && swift build
 .build/debug/import_quran \
@@ -116,16 +148,21 @@ cd Scripts/import_quran && swift build
   --source-version "<version>" \
   --source-date <YYYY-MM-DD>
 ```
-This writes `quran.sqlite`, `VERSION`, `CHECKSUM`, `SOURCE.md`, and the machine-readable `MANIFEST.json` together.
+
 ```
 cd Scripts/verify_quran && swift build
-.build/debug/verify_quran ../../Resources/Quran   # must exit 0; also cross-checks MANIFEST.json if present
+.build/debug/verify_quran ../../Resources/Quran   # must exit 0; cross-checks MANIFEST.json
 ```
 
-**Re-run the GeoNames import pipeline** (only needed to refresh from a newer GeoNames dump, change the country/population filter, or refresh Arabic name coverage — `Resources/GeoNames/` is otherwise a committed, generated artifact; never hand-edit it). Download `cities1000.zip` from https://download.geonames.org/export/dump/cities1000.zip and unzip it first; `--arabic-names` is optional (omitting it just leaves every `nameArabic` nil) but needed to populate Arabic display names — download `alternateNamesV2.zip` from https://download.geonames.org/export/dump/alternateNamesV2.zip, unzip it (~778MB), then pre-filter to Arabic-tagged rows only (the importer doesn't scan the full 19M-row world dump itself):
+**GeoNames.** Download and unzip `cities1000.zip`. `--arabic-names` is optional
+but needed for Arabic display names: download and unzip `alternateNamesV2.zip`
+(~778 MB), then pre-filter it, since the importer does not scan the full 19M-row
+world dump itself.
+
 ```
 awk -F'\t' '$3=="ar"' alternateNamesV2.txt > arabic_only_worldwide.tsv
 ```
+
 ```
 cd Scripts/import_geonames && swift build
 .build/debug/import_geonames \
@@ -136,39 +173,211 @@ cd Scripts/import_geonames && swift build
   --arabic-names <path-to-arabic_only_worldwide.tsv>
 ```
 
-**Check entitlements/sandbox on a built app** (verify no network-client entitlement ever creeps in):
-```
-codesign -d --entitlements :- <path-to>/Ayah.app
-```
+Both importers write their checksum file themselves, and both must stay
+**deterministic**: two runs over the same input produce byte-identical output,
+which is what makes a checksum reproducible rather than merely
+corruption-detecting. Do not put a timestamp or any other per-run value into
+either database; `SOURCE.md` is where a generation time belongs. `GEONAMES_CHECKSUM`
+used not to be generated at all, which meant every GeoNames re-import produced a
+database the app then refused to load at launch until someone regenerated the
+checksum by hand.
 
-## Architecture
+## Rules that must not be broken
 
-**`App/` (Xcode app target, AppKit-facing)** vs. **`Packages/AyahKit/` (local SPM package, logic-only)**: this split is deliberate, not incidental. Anything that doesn't need AppKit (Quran, Memorization, Prayer, Scheduling, Notifications, Settings, Persistence — per `ARCHITECTURE.md`) belongs in `AyahKit` so it stays fast to unit-test with plain `swift test`. Only window/panel/status-item management, which is inherently AppKit-bound, belongs in `App/`. When adding a new module in a later stage, default to putting it in `AyahKit` unless it directly manipulates `NSWindow`/`NSPanel`/`NSScreen`.
+Each of these cost real debugging time at least once, and every one of them
+fails silently.
 
-**Notch UI (`App/UI/Notch/`)**: `NotchController` computes the physical notch's screen-space rect from `NSScreen.safeAreaInsets` / `auxiliaryTopLeftArea` / `auxiliaryTopRightArea` (macOS 12+ APIs) and positions a borderless, non-activating `NotchPanel` (`NSPanel`, level `.statusBar`) there; it recomputes on `didChangeScreenParametersNotification`. On Macs without a notch, `attachToNotchIfAvailable()` is simply a no-op — there is no separate "fallback mode" to maintain, since `StatusItemController` (`App/UI/MenuBar/`) is unconditionally created regardless of notch presence and is the app's universal Settings/interaction entry point. `NotchViewModel` drives expand/collapse purely via `@Published` state consumed by SwiftUI `withAnimation` — there must never be a continuous per-frame animation loop here; idle CPU is a top-priority constraint (see `ARCHITECTURE.md` §18) and this is the main lever on it.
+**`project.yml`'s `Resources` entry needs `buildPhase: resources` explicitly.**
+XcodeGen cannot infer a resource type for an extensionless file (e.g.
+`Resources/Quran/CHECKSUM`), so without the override it emits only a
+`PBXFileReference` and never wires the file into Copy Bundle Resources — the app
+ships without it and nothing fails at build time. Resource files are also
+flattened into `Contents/Resources/` with no subfolder nesting, so filenames
+must be unique bundle-wide; that is why `**/SOURCE.md`, `**/VERSION`, and
+`**/MANIFEST.json` are excluded from bundling rather than shipped.
 
-**Notch expanded-card safe zone**: `NotchContentView`'s expanded card reserves top clearance of at least `viewModel.collapsedSize.height` (the live notch height `NotchController.reposition` derives from `NotchController.notchFrame`) before any text — that band is physically occluded by the camera housing on real hardware, not just empty padding. This only surfaces on an actual notched Mac; a screenshot-only check can miss it (ayah text, especially tall Arabic diacritics, gets clipped under the housing otherwise). `expandedSize` is a duplicated constant in both `NotchController` (panel window size) and `NotchContentView` (content sizing) — keep them in sync manually if either changes, and don't shrink the top-padding fix to reclaim text space without growing `expandedSize.height` to compensate. The Settings popover has the identical duplicated-constant shape: `StatusItemController`'s `popover.contentSize` and `PopoverContentView`'s own `.frame(width:height:)` must be changed together, or content silently clips against the smaller of the two with no visible scroll indicator warning the user there's more below (this actually happened — see "Prayer settings UI" below).
+**`Info.plist` is hand-written** (`GENERATE_INFOPLIST_FILE: NO`). It must keep
+`CFBundleIdentifier`, `CFBundleExecutable`, `CFBundleName`, and
+`CFBundlePackageType` set explicitly. Omitting `CFBundleIdentifier` crashes App
+Sandbox initialization on launch (`SIGTRAP` in `libsecinit_appsandbox`) before
+any app code runs.
 
-**SwiftUI `List` + `.onTapGesture` on macOS is unreliable — don't use it for row selection.** `List` on macOS is backed by `NSTableView`/`NSOutlineView`, whose own click-to-select handling competes with a `.onTapGesture` attached to a row's content and reliably wins: the gesture silently never fires, even though Accessibility inspection confirms the click lands inside the row. Confirmed by hand while building `CityPickerView` (see "Real bug found and fixed" below) — not a one-off fluke of that window. Use a `Button { action } label: { rowContent }.buttonStyle(.plain)` per row instead; it goes through AppKit's normal action mechanism and reliably fires. `MemorizationSetsView.row(for:)` used the same old `.onTapGesture` pattern and has since been fixed the same way — see CLAUDE.md's "Build order / current stage" for the fix and its verification.
+**Check the actual OS requirement for a permission API, not just its evident
+intent.** `CurrentLocationProvider` calls `requestWhenInUseAuthorization()`,
+which requires `NSLocationWhenInUseUsageDescription` specifically. With only the
+legacy `NSLocationUsageDescription` present, macOS silently ignores the request —
+no dialog, no delegate callback — and the `CheckedContinuation` never resumes. A
+review pass once cited the wrong key as evidence this flow was correct.
 
-**Third-party enums that don't declare `Sendable` can be given it retroactively** when they're genuinely simple, immutable value types (no reference state) — e.g. `extension CalculationMethod: @unchecked @retroactive Sendable {}` for Adhan Swift's `CalculationMethod`/`Madhab` in `PrayerCalculator.swift`, needed because `AppSettings: Sendable` stores them directly and Swift 6 strict concurrency otherwise rejects the stored properties. Reach for this instead of wrapping the third-party type in a parallel local enum just to get `Sendable` — only justified when you've actually checked the type has no mutable/reference state.
+**SwiftUI `List` + `.onTapGesture` does not work for row selection on macOS.**
+`List` is backed by `NSTableView`/`NSOutlineView`, whose own click handling
+competes with the gesture and wins: it silently never fires, even though
+Accessibility confirms the click landed inside the row. Use
+`Button { … } label: { row }.buttonStyle(.plain)` instead. Both sites that had
+this bug (`CityPickerView`, `MemorizationSetsView.row(for:)`) are fixed; do not
+reintroduce the pattern.
 
-**`AyahKit.swift`'s `public enum AyahKit` version-marker namespace shadows the module name for qualified lookups within the module.** A file that does `import Adhan` alongside `@testable import AyahKit` (or, in the app target, `import Adhan` alongside `import AyahKit`) and needs `AyahKit`'s own `Coordinates` type specifically — ambiguous against `Adhan.Coordinates`, since both modules expose a type with that name — cannot disambiguate by writing `AyahKit.Coordinates`; that resolves to the marker enum, not the module, and fails to compile. Resolve it via argument-position type inference instead (construct `Coordinates(...)` directly where a parameter's declared type already picks the right overload, not as a separately-typed local variable), as `PrayerCalculatorTests.swift` does. The same ambiguity hits a *property* that would otherwise need `Coordinates` as its declared type (e.g. `PopoverContentView`'s prayer-time resolution, needing coordinates from either a picked `City` or `AppSettings.currentLocationCoordinates`) — argument-position inference doesn't apply there since there's no call site to infer from. The fix is the same idea one level up: never write the bare type name at all, and let a `let` binding infer its type from an already-concretely-typed source expression (`selectedCity?.coordinates`, `settingsStore.settings.currentLocationCoordinates`) instead of declaring a separately `Coordinates`-typed property — see the comment above `PopoverContentView.todaysPrayerTimes`.
+**SwiftUI `.onAppear` is not reliably timed on a view hosted directly as an
+`NSWindow`'s `contentViewController`** — that is, with no SwiftUI `App`/`Scene`
+driving it. `MemorizationSetsView` loading its surah list in `.onAppear` produced
+an empty picker the first time the window opened. Load initial data in the
+view's `init` for any view hosted this way. This does not apply to
+`PopoverContentView`, which uses live bindings rather than a one-time load.
 
-**Concurrency**: classes that touch AppKit UI directly (`NotchController`, `StatusItemController`) are marked `@MainActor` explicitly — Swift 6 strict concurrency will reject AppKit object construction (e.g. `NSPopover()`) inside a non-isolated context, so don't remove these annotations to "simplify" a class that constructs AppKit objects.
+**Sizes that two files must agree on live in `App/UI/LayoutMetrics.swift`.**
+`NotchMetrics.expandedSize` is read by both `NotchController` (panel size) and
+`NotchContentView` (content sizing); `PopoverMetrics.contentSize` by both
+`StatusItemController` and `PopoverContentView`. Each pair was once two literals
+kept in sync by hand, which silently clips content against the smaller of the
+two — no build error, and for the popover no scroll indicator warning the user
+there is more below. Put any future window/view size pair here.
 
-**A `@MainActor`-isolated class conforming to a plain (non-isolated) delegate protocol from a system framework needs an *isolated conformance*, not a `@MainActor`-annotated extension.** `CurrentLocationProvider` (`@MainActor`) conforming to `CLLocationManagerDelegate` (an ordinary, non-`Sendable`-audited protocol) hit Swift 6's `#ConformanceIsolation` error even with `@MainActor extension CurrentLocationProvider: CLLocationManagerDelegate { ... }` — that annotation isolates the extension's *members*, not the conformance itself, which is a distinct thing the compiler tracks separately. The fix (Swift 6.2's isolated-conformance syntax) puts `@MainActor` directly on the protocol name in the conformance clause instead: `extension CurrentLocationProvider: @MainActor CLLocationManagerDelegate { ... }`. Reach for this pattern for any future delegate-protocol conformance (background schedulers, system framework callbacks) on a `@MainActor` type — it's a different fix from the `@unchecked @retroactive Sendable` pattern above, which is for isolated stored *properties* of a `Sendable` struct, not for a class's protocol conformance.
+**The notch expanded card reserves top clearance of at least
+`viewModel.collapsedSize.height`** before any text. On real notched hardware
+that band is physically occluded by the camera housing, and tall Arabic
+diacritics get clipped under it. Growing `NotchMetrics.expandedSize.height` is
+safe; shrinking it is not, and text space must never be reclaimed by trimming
+this clearance.
 
-**SwiftUI `.onAppear` is not reliably timed on a view hosted directly as an `NSWindow`'s `contentViewController`** — i.e. no SwiftUI `App`/`Scene` driving it, as with `MemorizationSetsWindowController`'s window. `MemorizationSetsView` learned this the hard way: loading the surah list in `.onAppear` produced an empty picker the first time the window opened. Load initial data in the view's `init` instead (`QuranRepository.surahs()` is a cheap in-memory cached read, so this isn't a performance concern) for any view hosted this way — this doesn't apply to `PopoverContentView`, which uses `@ObservedObject`/live bindings rather than a one-time load.
+**Never match `uthmanic_text` with a plain-spelled substring, and never
+normalize it.** Uthmani orthography interleaves diacritics between consonants,
+so `LIKE '%صلاة%'` against `uthmanic_text` returns zero rows while the same query
+against `searchable_text` returns 63. Filter on `searchable_text` — a column
+KFGQPC ships pre-simplified, not one derived by mutating the Uthmani text — and
+display `uthmanic_text`. No diacritic stripping, no character substitution,
+ever.
 
-**Info.plist is hand-written, not Xcode-generated** (`GENERATE_INFOPLIST_FILE: NO` in `project.yml`) — it must keep `CFBundleIdentifier`, `CFBundleExecutable`, `CFBundleName`, and `CFBundlePackageType` set explicitly (via the `$(PRODUCT_BUNDLE_IDENTIFIER)` etc. build-setting variables). Omitting `CFBundleIdentifier` specifically crashes App Sandbox initialization on launch (`SIGTRAP` in `libsecinit_appsandbox`) before any app code runs — this already happened once during Stage 2 and cost real debugging time; don't regress it if `Info.plist` is touched again.
+**Always display `City.displayName`, never `City.name`.** Well under half of
+bundled cities have an Arabic name, and a place with no Arabic exonym is meant to
+stay Latin. `displayName` is the single `nameArabic ?? name` fallback rule; do
+not reimplement the `??` at a call site.
 
-**`project.yml`'s `Resources` source entry needs `buildPhase: resources` explicitly** — XcodeGen can't infer a resource type for an extensionless file (e.g. `Resources/Quran/CHECKSUM`) from its filename, so by default it only adds a `PBXFileReference` for such files without ever wiring them into "Copy Bundle Resources," and the app silently ships without them (no build error). Confirmed by inspecting `project.pbxproj` for a missing `PBXBuildFile` entry. If a new extensionless resource file is ever added under `Resources/`, this override is what keeps it actually bundled. Also note: resource files under `Resources/` are flattened into `Contents/Resources/` (no subfolder nesting) — filenames must stay unique bundle-wide, which is why `Resources/Quran/SOURCE.md` and `Resources/Fonts/SOURCE.md` are both excluded from bundling (`**/SOURCE.md`/`**/VERSION` in `project.yml`) rather than shipped (they're documentation, not runtime data, and would otherwise collide at the flattened path).
+**Prayer times must be computed in the target location's own timezone.**
+`PrayerCalculator.prayerTimes(...)` takes a required `timeZone:`; Adhan Swift
+interprets the passed date components via a UTC-based calendar internally, so the
+caller must supply the year/month/day as experienced at that location. Using
+`TimeZone.current` instead produced a shipped wrong-day bug for anyone whose
+system timezone differed from their selected city — the diaspora and travel case
+the bundled city dataset exists for. `PrayerLocationResolver.resolve` is the one
+place that decides coordinates and timezone; both the Settings popover and
+`PrayerAlertScheduler` go through it, because when those two disagree the user
+sees one set of times and gets alerts at another.
 
-**Quran data integrity**: `Resources/Quran/{quran.sqlite,SOURCE.md,VERSION,CHECKSUM}` are generated only by `Scripts/import_quran` — never hand-edited, and any change to them must come with a re-run of the importer (which regenerates `VERSION`/`CHECKSUM` together, see `CONTRIBUTING.md`). The Uthmanic Quran text itself must never be programmatically normalized (no diacritic stripping, no character substitution) — `searchable_text` is a column KFGQPC provides pre-simplified for search, not one derived by mutating `uthmanic_text`.
+**One shared instance of `SettingsStore`, `MemorizationRepository`, and
+`LastShownStore`**, constructed once in
+`AppDelegate.applicationDidFinishLaunching` and injected. Two `SettingsStore`
+instances over the same `UserDefaults` key do not observe each other, so a
+settings UI writing to one would never live-update the other.
 
-**GeoNames city names: always display `City.displayName`, never `City.name` directly.** Only ~33% of bundled cities have a GeoNames-tagged Arabic name (`City.nameArabic`); `displayName` is the one `nameArabic ?? name` fallback rule, and every UI site (`CityPickerView`, `PopoverContentView`) uses it rather than reimplementing the `??` itself — do the same for any new city-display UI rather than reaching for `.name`.
+**Launch-at-login state has no `AppSettings` field, deliberately.**
+`SMAppService.mainApp.status` is macOS's own Login Items list, independently
+editable from System Settings, and is the source of truth. Mirroring it into
+`UserDefaults` would create a second copy that drifts.
+`LaunchAtLoginViewModel.refresh()` re-reads it on demand.
 
-**`Scripts/import_quran` and `Scripts/verify_quran` are deliberately two independent SPM packages**, not targets inside `AyahKit` — each has its own `Package.swift` and links system `SQLite3`/`CryptoKit` directly (no third-party deps). They each carry their own small copy of `Models.swift` and the canonical-checksum algorithm (`QuranChecksum.swift`); `Packages/AyahKit/Tests/AyahKitTests/QuranIntegrityTests.swift` independently re-implements the same read-and-checksum logic a third time via the raw C API rather than depending on either script. This triplication is intentional belt-and-suspenders for data-integrity-critical content, not an oversight to "clean up" into a shared dependency.
+**Third-party enums can be given `Sendable` retroactively** when they are
+genuinely simple immutable value types — e.g.
+`extension CalculationMethod: @unchecked @retroactive Sendable {}` for Adhan
+Swift's `CalculationMethod`/`Madhab`, which `AppSettings: Sendable` stores
+directly. Reach for this instead of wrapping a third-party type in a parallel
+local enum, but only after actually checking it holds no mutable or reference
+state.
 
-**`QuranIntegrityTests` locates `Resources/Quran/` via `#filePath`, not SPM package resources**: that directory lives outside every SPM target's source tree, so it can't be declared as a `resources:` entry. An earlier attempt symlinked the files into `Tests/AyahKitTests/Resources/` and declared them as `.copy()` resources, but SPM's resource copying preserves symlinks as symlinks rather than dereferencing them — the relative symlink target (correct from the source tree) pointed at the wrong location once physically copied into the differently-nested `.build/.../*.bundle/` output, producing a broken link (`sqlite3_open` failing with `SQLITE_CANTOPEN`). Resolving the path at runtime from `#filePath` instead sidesteps this and always reads the live file.
+**`AyahKit.swift`'s `public enum AyahKit` marker shadows the module name.** A
+file importing both `Adhan` and `AyahKit` cannot disambiguate `Coordinates` by
+writing `AyahKit.Coordinates` — that resolves to the marker enum and fails to
+compile. Resolve it by argument-position type inference (construct
+`Coordinates(...)` directly where a parameter's declared type picks the
+overload), as `PrayerCalculatorTests` does. A stored or computed *property* has
+no call site to infer from, so the fix there is to wrap the value in a type that
+exists in one module only: `PrayerLocationResolver`'s `ResolvedPrayerLocation`
+does this, and its doc comment records why.
+
+**Classes touching AppKit directly are explicitly `@MainActor`** —
+`NotchController`, `StatusItemController`, and the schedulers that drive them.
+Swift 6 rejects AppKit object construction in a non-isolated context; do not
+remove these annotations to "simplify" a class.
+
+**A `@MainActor` class conforming to a plain system delegate protocol needs an
+isolated conformance**, not a `@MainActor`-annotated extension. That annotation
+isolates the extension's *members*, not the conformance, which the compiler
+tracks separately. Write
+`extension CurrentLocationProvider: @MainActor CLLocationManagerDelegate { … }`.
+
+**`QuranIntegrityTests` locates `Resources/Quran/` via `#filePath`, not SPM
+package resources.** That directory is outside every SPM target's source tree.
+An earlier attempt symlinked the files in and declared them as `.copy()`
+resources, but SPM preserves symlinks rather than dereferencing them, so the
+relative target broke once copied into the differently-nested bundle
+(`sqlite3_open` failing with `SQLITE_CANTOPEN`).
+
+**A local build is weak evidence for CI: the toolchains are far apart.** This
+Mac runs Xcode 26.3 / Swift 6.2; the `macos-15` runner selects Xcode 16.4 /
+Swift 6.1. Swift 6.2 infers actor isolation for an XCTest override, so a
+`@MainActor` test class whose nonisolated `tearDown()` touches isolated
+properties compiles here and fails on CI. That exact mistake has already
+cost one red run. When a change leans on recent concurrency behaviour, treat
+CI as the authority and expect to iterate there; the properties in
+`NotchViewModelTests` are `nonisolated(unsafe)` for this reason, which is
+sound because XCTest runs setUp, the test, and tearDown serially.
+
+**AyahKit is linked into `AyahTests` with `link: false`.** It builds as a static
+library, so linking it into the test bundle as well as the host app would give
+the two modules separate, mutually incompatible copies of every AyahKit type,
+and `@testable import Ayah` would hand `NotchViewModel.init` the wrong
+`SettingsStore`.
+
+## Deliberate decisions — do not "fix" these
+
+- **The KFGQPC Quran text carries no published redistribution license.** A
+  documented, re-confirmed, accepted product risk in `THIRD_PARTY_LICENSES.md`.
+  Do not resolve it by quietly swapping the data source. The bundled **font** is
+  a separate and settled question: its EULA is embedded in the file's own
+  metadata and permits Ayah's unmodified bundling.
+- **The Quran checksum algorithm exists in three independent copies** across
+  `import_quran`, `verify_quran`, and `QuranIntegrityTests`. Belt-and-suspenders
+  for integrity-critical data. Do not consolidate.
+- **`Scripts/import_quran` and `Scripts/verify_quran` are separate SPM
+  packages** with their own `Package.swift`, linking only system SQLite3 and
+  CryptoKit. Same reasoning.
+- **The Release build runs `verify_quran` plus the full AyahKit suite as a
+  pre-build script.** Slow and unconventional, and it couples building to
+  testing. It is also what makes shipping a Release binary against unverified
+  Quran data impossible. Keep it. It is gated on `$CONFIGURATION = Release`, so
+  Debug builds skip it.
+- **`MemorizationSet.RepetitionMode.random` is not offered in the editor.** It
+  exists and is tested, but shuffling away the order a user is memorizing in is
+  not a useful option to expose.
+- **The Quran schema omits `hizb_quarter`, `ruku_number`, `manzil_number`,
+  `sajda`, translated surah names, `revelation_place`, and `revelation_order`.**
+  KFGQPC's real export does not include them and no in-scope feature needs them;
+  they were dropped rather than pulling in a second data source. See
+  `ARCHITECTURE.md` §7 and `Resources/Quran/SOURCE.md`.
+- **Release builds are arm64-only.** This means the non-notch fallback bar
+  cannot reach Intel Macs, so its real audience is Apple Silicon machines
+  without a notch. Note the interaction; it is not a defect.
+- **`AboutWindowController`'s 480×520 against `AboutView`'s `minWidth`/
+  `minHeight`** is not the `LayoutMetrics` hazard: it is a minimum against a
+  resizable window, so a divergence degrades gracefully instead of clipping.
+- **Switching notch/fallback mode while running is out of scope** — e.g. a
+  notched MacBook entering clamshell with only an external display attached. The
+  mode is picked once, at attach time.
+
+## Verification expectations
+
+A claim here is backed by something that was actually run, and **a new test is
+seen to fail before it is trusted** — by inverting its assertion or disabling
+the guard it covers. The timezone regression test, the Quran tampering tests,
+every `NotchViewModel` test, and the GeoNames checksum fix were all confirmed
+this way.
+
+UI work is verified by running the built app and inspecting it through
+Accessibility or a screenshot, not by reading the diff. Two practical notes: the
+menu-bar popover's content lives under `pop over 1 of menu bar 2`, not
+`window 1`; and `entire contents` of a SwiftUI scroll area often returns
+nothing, so address elements directly by index instead.
+
+Any change touching `AppSettings`, entitlements, or data handling carries an
+implicit obligation to re-check `PRIVACY.md` and `SECURITY.md` for staleness. A
+privacy document falling out of sync with the code is a bug, not a matter of
+opinion.

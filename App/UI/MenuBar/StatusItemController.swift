@@ -54,7 +54,7 @@ final class StatusItemController {
         let onReplay: () -> Void = { [weak self] in self?.replayLastShown() }
 
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 320, height: 620)
+        popover.contentSize = NSSize(width: PopoverMetrics.contentSize.width, height: PopoverMetrics.contentSize.height)
         popover.contentViewController = NSHostingController(
             rootView: PopoverContentView(
                 settingsStore: settingsStore,

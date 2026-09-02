@@ -130,10 +130,23 @@ check_quran_data() {
 6236" ]
 }
 
+# Row count tracks Resources/GeoNames/SOURCE.md. It is pinned rather than
+# bounded so a substituted or truncated database cannot pass quietly; a
+# re-import that legitimately changes it updates this number too.
 check_geonames_data() {
     RESULT=$(sqlite3 "$REPO_ROOT/Resources/GeoNames/cities_filtered.sqlite" 'PRAGMA integrity_check; SELECT COUNT(*) FROM cities;')
     [ "$RESULT" = "ok
-4654" ]
+4659" ]
+}
+
+# The importer writes GEONAMES_CHECKSUM, and LocationRepository fails closed
+# against it at every launch. Verify the committed pair agrees before a build
+# that would ship it.
+check_geonames_checksum() {
+    EXPECTED=$(tr -d '[:space:]' < "$REPO_ROOT/Resources/GeoNames/GEONAMES_CHECKSUM")
+    ACTUAL="sha256:$(shasum -a 256 "$REPO_ROOT/Resources/GeoNames/cities_filtered.sqlite" | cut -d' ' -f1)"
+    printf 'expected: %s\nactual:   %s\n' "$EXPECTED" "$ACTUAL"
+    [ "$EXPECTED" = "$ACTUAL" ]
 }
 
 printf 'Ayah release-candidate checks\nArtifacts: %s\n\n' "$OUTPUT_DIR"
@@ -144,6 +157,7 @@ run_logged 'Pinned lockfile equality' lockfiles.log check_locks || true
 run_logged 'Profiling script syntax' shell-syntax.log check_shell_scripts || true
 run_logged 'Quran SQLite integrity/counts' quran-sqlite.log check_quran_data || true
 run_logged 'GeoNames integrity/counts' geonames-sqlite.log check_geonames_data || true
+run_logged 'GeoNames bundled checksum' geonames-checksum.log check_geonames_checksum || true
 
 run_logged 'Quran importer build' import-quran-build.log swift build --package-path "$REPO_ROOT/Scripts/import_quran" || true
 run_logged 'GeoNames importer build' import-geonames-build.log swift build --package-path "$REPO_ROOT/Scripts/import_geonames" || true
@@ -155,6 +169,24 @@ PRODUCT_NAME=AyahReleaseChecks$$
 BUNDLE_IDENTIFIER=com.ayah.app.releasechecks.$TIMESTAMP.$$
 DEBUG_DERIVED=$OUTPUT_DIR/DerivedData-Debug
 RELEASE_DERIVED=$OUTPUT_DIR/DerivedData-Release
+APP_TESTS_DERIVED=$OUTPUT_DIR/DerivedData-AppTests
+
+# The AyahTests bundle is app-hosted, so it needs a full Xcode build rather
+# than `swift test`, and its own derived data: PRODUCT_NAME is deliberately
+# not overridden here the way it is for the builds below, because TEST_HOST
+# resolves through the real Ayah.app path.
+run_logged 'App test suite' app-tests.log \
+    xcodebuild \
+        -project "$REPO_ROOT/Ayah.xcodeproj" \
+        -scheme Ayah \
+        -configuration Debug \
+        -destination 'platform=macOS' \
+        -derivedDataPath "$APP_TESTS_DERIVED" \
+        -clonedSourcePackagesDirPath "$PACKAGE_STORAGE" \
+        -disableAutomaticPackageResolution \
+        -onlyUsePackageVersionsFromResolvedFile \
+        -skipPackageUpdates \
+        test || true
 
 run_logged 'Debug application build' xcodebuild-debug.log \
     xcodebuild \
@@ -309,6 +341,11 @@ if [ -x "$RELEASE_EXECUTABLE" ]; then
 
     awk -F, -v minutes="$IDLE_MINUTES" -v expected="$IDLE_SAMPLE_COUNT" -v report="$IDLE_REPORT" '
         function mib(value, suffix, number) {
+            # top marks a value that changed since the previous sample with a
+            # trailing +/- ("21M+"). Strip it before reading the unit,
+            # otherwise the unit tests below all miss and the value falls
+            # through to the bytes branch, reading 21 MiB as 0.00002 MiB.
+            sub(/[+-]$/, "", value)
             suffix = substr(value, length(value), 1)
             number = value + 0
             if (suffix == "G") return number * 1024

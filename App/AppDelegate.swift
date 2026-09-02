@@ -7,7 +7,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var notchController: NotchController?
 
+    /// `AyahTests` is an app-hosted unit-test bundle: XCTest injects it
+    /// into this very process, so without this guard the real app would
+    /// launch first — writing a last-shown record into the user's real
+    /// `UserDefaults`, starting both schedulers against their real
+    /// repositories, and putting a panel on screen — before a single test
+    /// ran. The tests construct exactly what they need against isolated
+    /// stores instead.
+    private static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !Self.isRunningUnitTests else {
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
         AppPerformanceSignposts.measure("LaunchInitialization") {
             NSApp.setActivationPolicy(.accessory)
 
@@ -136,15 +151,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let dbURL = Bundle.main.url(forResource: "quran", withExtension: "sqlite"),
               let checksumURL = Bundle.main.url(forResource: "CHECKSUM", withExtension: nil)
         else {
-            presentErrorAlert(title: "Ayah: Quran data unavailable", message: "Quran data files were not found in the app bundle.")
+            presentErrorAlert(
+                title: "آية: بيانات القرآن غير متوفرة",
+                message: "لم يتم العثور على ملفات بيانات القرآن ضمن حزمة التطبيق."
+            )
             return nil
         }
         do {
             return try QuranRepository(databasePath: dbURL.path, checksumPath: checksumURL.path)
         } catch {
             presentErrorAlert(
-                title: "Ayah: Quran data unavailable",
-                message: "Quran data failed integrity verification and will not be displayed.\n\n\(error)"
+                title: "آية: بيانات القرآن غير متوفرة",
+                message: "فشل التحقق من سلامة بيانات القرآن، ولن يتم عرض النص.\n\n\(error)"
             )
             return nil
         }
@@ -170,8 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return try MemorizationRepository(databasePath: dbURL.path)
         } catch {
             presentErrorAlert(
-                title: "Ayah: Memorization data unavailable",
-                message: "Memorization data could not be loaded and verse display is disabled for this launch.\n\n\(error)",
+                title: "آية: بيانات الحفظ غير متوفرة",
+                message: "تعذر تحميل بيانات الحفظ، وسيتم تعطيل عرض الآيات في هذه الجلسة.\n\n\(error)",
                 style: .warning
             )
             return nil
@@ -212,7 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = style
         alert.messageText = title
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "موافق")
         alert.runModal()
     }
 }

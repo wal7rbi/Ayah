@@ -3,9 +3,10 @@
 /// [child window] open" pattern `StatusItemController` (App target)
 /// needs for each of its AppKit window controllers (memorization sets,
 /// city picker). Generic over any reference type so the reuse logic
-/// itself is plain, AppKit-free, and unit-testable with `swift test`,
-/// even though `App/` has no test target of its own to exercise the
-/// real `NSWindowController` subclasses that use it.
+/// itself is plain, AppKit-free, and unit-testable with `swift test`.
+/// `App/` does now have a test target (`AyahTests`), but it covers
+/// `NotchViewModel`, not the real `NSWindowController` subclasses that
+/// use this.
 public final class LazySingleton<Value: AnyObject> {
     public private(set) var current: Value?
 

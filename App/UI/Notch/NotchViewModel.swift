@@ -34,22 +34,27 @@ final class NotchViewModel: ObservableObject {
     private var settingsCancellable: AnyCancellable?
     private var autoCollapseTask: Task<Void, Never>?
     private var shouldSkipInitialScheduledVerses = false
+    /// How long newly-due content stays expanded before the notch
+    /// collapses itself again. An init parameter rather than a constant
+    /// only so `AyahTests` can drive the auto-collapse path without
+    /// spending 12 seconds of wall clock per test; production callers use
+    /// the default.
+    private let autoCollapseDelay: Duration
 
     private static let expandSpring = Animation.spring(response: 0.4, dampingFraction: 0.8)
     private static var motionAnimation: Animation? {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : expandSpring
     }
-    /// How long newly-due content stays expanded before the notch
-    /// collapses itself again.
-    private static let autoCollapseDelay: Duration = .seconds(12)
 
     init(
         quranRepository: QuranRepository?,
         verseScheduler: VerseScheduler?,
         prayerAlertScheduler: PrayerAlertScheduler?,
         settingsStore: SettingsStore,
-        lastShownStore: LastShownStore
+        lastShownStore: LastShownStore,
+        autoCollapseDelay: Duration = .seconds(12)
     ) {
+        self.autoCollapseDelay = autoCollapseDelay
         self.verseScheduler = verseScheduler
         self.prayerAlertScheduler = prayerAlertScheduler
         self.settingsStore = settingsStore
@@ -163,8 +168,9 @@ final class NotchViewModel: ObservableObject {
     private func expandAndAutoCollapse() {
         cancelAutoCollapse()
         withAnimation(Self.motionAnimation) { isExpanded = true }
+        let delay = autoCollapseDelay
         autoCollapseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.autoCollapseDelay)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             self?.autoCollapseTask = nil
             withAnimation(Self.motionAnimation) { self?.isExpanded = false }

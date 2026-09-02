@@ -1,9 +1,9 @@
 # Quran data supply-chain verification (see ARCHITECTURE.md §8 and
-# SECURITY.md's trust-model section). Runs unconditionally on every push
-# and pull request — verify_quran and the AyahKit test suite are both
-# fast enough that there's no cost benefit to path-filtering, and a path
-# filter is itself a footgun (a future file this should cover could
-# silently fall outside it).
+# SECURITY.md's trust-model section), plus both test suites. Runs
+# unconditionally on every push and pull request — verify_quran and the
+# tests are all fast enough that there's no cost benefit to
+# path-filtering, and a path filter is itself a footgun (a future file
+# this should cover could silently fall outside it).
 #
 # What this does NOT prove, by design (documented, not glossed over):
 #   - It does not verify that a PR's claimed official MD5/SHA-1 in
@@ -49,6 +49,15 @@ jobs:
 
       - name: Run AyahKit test suite (includes Quran tampering-detection tests)
         run: cd Packages/AyahKit && swift test
+
+      # App-layer tests (`Tests/App`). These are app-hosted, so unlike the
+      # AyahKit suite above they need a full Xcode build and run inside a
+      # real Ayah process — hence Debug and `xcodebuild test` rather than
+      # `swift test`.
+      - name: Run App test suite (NotchViewModel state machine)
+        run: >-
+          xcodebuild test -project Ayah.xcodeproj -scheme Ayah -configuration Debug
+          -destination 'platform=macOS' -disableAutomaticPackageResolution
 
       - name: Build Release app using the reviewed package resolution
         run: >-

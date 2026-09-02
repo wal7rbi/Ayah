@@ -14,7 +14,7 @@ This began as the research-stage design and now records both implemented
 decisions and explicitly marked history. The app target, AyahKit, bundled
 datasets, import/verification tools, settings, memorization, prayer-time
 calculation, in-notch alerts, About/source credits, and unnotarized DMG
-packaging exist. Version 1.0.1 intentionally targets Apple Silicon and does
+packaging exist. Releases intentionally target Apple Silicon and do
 not use Developer ID or notarization; the stable artifact remains gated on
 the hardware/accessibility checklist in `docs/release/`.
 
@@ -47,7 +47,10 @@ boundary: `AyahKit` contains everything that doesn't need AppKit —
 `Quran`, `Memorization`, `Prayer`, `Scheduling`,
 `Settings`, `Persistence` — and is fully unit-testable in isolation. Only
 notch/menu-bar window management, which is inherently AppKit-bound, lives
-in the app target.
+in the app target. The app target does have a small suite of its own
+(`Tests/App`, the `AyahTests` target, covering `NotchViewModel`'s state
+machine), but it is app-hosted and runs under `xcodebuild test` — exactly
+the slower path this split exists to keep off the main body of logic.
 
 ```
 Ayah/
@@ -125,9 +128,9 @@ interaction pattern to maintain rather than two divergent UIs.
 **Verse display and prayer alerts** get their own fallback, reusing the
 same view stack as the physical notch rather than going unimplemented or
 duplicating it. `NotchController.attachToNotchIfAvailable()` picks one of
-two paths once, at attach time: `attachPhysicalNotch(on:)` (today's
-existing behavior — a panel sized to the real notch cutout, always visible
-as a small collapsed pill) or `attachFallbackBar()` when
+two paths once, at attach time: `attachPhysicalNotch(on:)` (a panel sized
+to the real notch cutout, always visible as a small collapsed pill) or
+`attachFallbackBar()` when
 `notchedScreen()` finds no notch. The fallback reuses the exact same
 `NotchPanel`/`NotchViewModel`/`NotchContentView` — same Uthmanic-font verse
 card, same prayer-alert card, same expand/auto-collapse timing — as a
@@ -146,10 +149,10 @@ Two differences from the physical-notch path, both driven by a
   Mac the way the physical notch pill blends into the camera housing.
 
 Both `VerseScheduler.start(...)` and `PrayerAlertScheduler.start(...)` are
-called from both paths identically — before this, they were only ever
-started from the physical-notch path, so verse display and prayer alerts
-silently never ran at all on a non-notch Mac (see §13's own note on this,
-now superseded). Switching modes while already running (e.g. a notched
+called from both paths identically. That matters: this is the only place
+either scheduler is started, so a path that skipped them would leave verse
+display and prayer alerts silently not running at all on that class of Mac.
+Switching modes while already running (e.g. a notched
 MacBook entering clamshell mode with only an external display attached) is
 out of scope — the same scope boundary the physical-notch path's own
 `screenParametersChanged()` already had (it only re-positions/hides within
@@ -413,32 +416,32 @@ can expose supported named presets, defaulting to Umm al-Qura. Adhan's
 `.other` is deliberately excluded because it is a 0°/0° custom-parameter
 template and Ayah does not expose custom-angle inputs.
 
-**Update: `PrayerCalculator.prayerTimes(...)` now takes a required
-`timeZone: TimeZone` parameter — a bug fix, not a new feature.** Adhan
-Swift's own source (`PrayerTimes.swift`) interprets the `date:
-DateComponents` it's handed through a UTC-based calendar internally, so
-the caller must supply year/month/day as experienced *at the target
-location*, not wherever the calling process happens to be. The original
-implementation extracted those components via
-`Calendar(identifier: .gregorian).dateComponents(...)`, whose implicit
-timezone is `TimeZone.current` — the Mac's own system timezone — rather
-than the selected city's (`City.timeZoneIdentifier`, already known via
-`LocationRepository`, was never threaded through). Any user whose
-system timezone differed from their selected prayer city — precisely
-the diaspora/travel use case §12's bundled ~4,650-city dataset exists
-for — could get prayer times, and prayer-alert firing times, computed
-for the wrong calendar day, for several hours around either timezone's
-midnight. The same implicit-system-TZ bug also affected §10's Ramadan
-detection (`isRamadan`), fixed the same way. `PrayerCalculatorTests.swift`
-gained a regression test that overrides `NSTimeZone.default` to a
-far-away zone for its duration and confirms the result is unchanged —
-confirmed to actually fail against the pre-fix implementation before
-being folded into the passing suite, not just plausible-looking.
-`PopoverContentView.todaysPrayerTimes` and `PrayerAlertScheduler`
-(`resolveLocation()`/`armNextTimer()`) now resolve and pass the correct
-zone (the selected city's, or the system IANA identifier cached alongside
-a one-shot current-location fix; `TimeZone.current` is retained only as a
-backward-compatible fallback for legacy settings).
+**`PrayerCalculator.prayerTimes(...)` takes a required `timeZone: TimeZone`.**
+Adhan Swift's own source (`PrayerTimes.swift`) interprets the
+`date: DateComponents` it is handed through a UTC-based calendar internally,
+so the caller must supply year/month/day as experienced *at the target
+location*, not wherever the calling process happens to be. Extracting those
+components through a calendar whose implicit timezone is `TimeZone.current`
+gives the wrong calendar day, for several hours around either zone's
+midnight, to any user whose system timezone differs from their selected
+prayer city — precisely the diaspora and travel case §12's bundled city
+dataset exists for. §10's Ramadan detection (`isRamadan`) takes the same
+parameter for the same reason. This was a shipped bug, found in the
+2026-08-23 audit; `PrayerCalculatorTests` guards it with a test that
+overrides `NSTimeZone.default` to a far-away zone and confirms the result is
+unchanged.
+
+**`PrayerLocationResolver.resolve` is the single place that decides which
+coordinates and timezone to use** — the selected city's, or the system IANA
+identifier cached alongside a one-shot current-location fix. Both
+`PopoverContentView` (what times are shown) and
+`PrayerAlertScheduler.armNextTimer()` (when alerts fire) go through it. They
+must not diverge: the wrong-day bug above existed in two independent copies
+of this logic and had to be fixed twice. A selected city whose stored
+identifier no longer parses resolves to nil, so the popover shows no prayer
+times rather than times computed in the Mac's own zone; `TimeZone.current`
+survives only in the current-location branch, where a cached fix came from
+this Mac and predates the captured-identifier field.
 
 ## 10. Umm al-Qura implementation details
 
@@ -472,17 +475,22 @@ name, lat/lon, country code, admin codes, population, and IANA timezone —
 directly usable without further lookup. Ayah bundles a **filtered
 subset** (Saudi Arabia and other Muslim-majority countries initially, not
 the full world dump) targeting tens to low hundreds of KB, expandable
-later. SimpleMaps' flagship "Basic" world-cities database is excluded — its
+later. Recorded rather than quietly left stale: the committed database has
+been ~410 KB since the Arabic-name column was added, so it sits just past
+that original target. It is still a single small bundled file with no
+runtime cost beyond one checksum and one load, so the target has not been
+re-cut — but it is a ceiling to weigh before widening the country or
+population filter again. `Resources/GeoNames/SOURCE.md` carries the
+current row count and size.
+
+SimpleMaps' flagship "Basic" world-cities database is excluded — its
 license prohibits redistribution. Adhan Swift itself ships no location
 data; it purely accepts `Coordinates`, so location lookup is entirely
 Ayah's own responsibility via `LocationRepository`.
 
-Location Services are never required by default — coordinates come from a
-manually selected city (or manually entered lat/lon), matching the privacy
-priority. Location Services could be added later as an explicit, opt-in
-convenience feature.
-
-**Update: this opt-in convenience feature has since been built.**
+Location Services are never required, and are off by default — coordinates
+come from a manually selected city, matching the privacy priority. They are
+available as an explicit, opt-in convenience.
 `AppSettings.prayerLocationSource` (`.city` default, or `.currentLocation`)
 picks between the bundled-city flow above and a one-shot
 `CurrentLocationProvider` (`Prayer/CurrentLocationProvider.swift`) fetch
@@ -509,110 +517,70 @@ at the OS level. The Settings popover's current-location section carries
 this disclosure in its own caption text; don't remove it when touching
 that UI.
 
-## 13. Prayer alerts (originally designed as OS notifications; superseded by an in-notch design — see below)
+## 13. Prayer alerts
 
-`UNUserNotificationCenter`, scheduled with `UNCalendarNotificationTrigger`
-using explicit `DateComponents` (including an explicit `timeZone` when a
-specific city's timezone must be honored) — **not**
-`UNTimeIntervalNotificationTrigger`, because prayer times differ every
-day and calendar-based triggers self-adjust correctly across DST within a
-timezone, whereas interval-based triggers would drift.
+**Prayer alerts render in the notch itself, in-process — not as OS
+notifications.** `Packages/AyahKit/Sources/AyahKit/Scheduling/{PrayerAlertEvent,
+PrayerAlertScheduler}.swift` sit alongside `VerseScheduler` as a peer
+scheduler. This was a product decision, not a technical one: the desired
+behaviour is a notch popup like the verse display, not a system banner, and
+an in-process alert cannot be silently disabled by an OS notification
+permission the user never granted. It also means no
+`UNUserNotificationCenter` authorization prompt, and no entitlement — none is
+required for any part of this feature.
 
-Once scheduled, notifications are OS-owned and fire even if the Ayah
-process isn't running. Because the system has historically capped pending
-local notifications (around 64), and because prayer times must be
-recomputed daily anyway, `PrayerNotificationScheduler` follows a single
-`rescheduleToday()` pattern: cancel only Ayah's own previously-scheduled
-requests, compute today's remaining and tomorrow's prayer times, and
-schedule fresh notifications — never scheduling weeks ahead. This runs on:
-app launch (safety net for sleep/restart/timezone changes that may have
-happened while not running), a local-midnight rollover timer, and any
-relevant settings change (calculation method, Asr method, city,
-notification toggles).
+The cost of that choice is that nothing fires while Ayah is not running.
+There is no OS handoff, so `PrayerAlertScheduler` must self-time every
+individual moment. `armNextTimer()` computes today's and tomorrow's
+reminder and at-time events fresh on every arm, takes the single soonest one
+across both days, and arms exactly one `DispatchSourceTimer` for it; firing
+invokes the callback and immediately rearms. There is deliberately no
+midnight-rollover timer — recomputing fresh on every arm rolls into tomorrow
+once today's events are exhausted. The one gap that leaves, an already-armed
+deadline passing while the Mac is asleep, is covered by `NotchController`
+calling `PrayerAlertScheduler.rearm()` on `NSWorkspace.didWakeNotification`,
+not by polling.
 
-**Update: this was built as described**, in `Packages/AyahKit/Sources/AyahKit/Notifications/PrayerNotificationScheduler.swift`.
-`AppSettings.arePrayerNotificationsEnabled` (off by default — turning it
-on is what triggered the `UNUserNotificationCenter` authorization prompt,
-matching `prayerLocationSource`'s "explicit opt-in" precedent in §12) and
-`AppSettings.prayerNotificationReminderMinutes` (0/5/10/15 in the Settings
-UI; `0` means "at the exact prayer time") backed one notification per
-prayer — Fajr, Dhuhr, Asr, Maghrib, Isha; sunrise excluded since it isn't
-a prayer. `notificationRequests(for:coordinates:...)` was a pure,
-synchronous, fully unit-tested function (the "what to schedule" half,
-mirroring `VerseScheduler.selectNextVerses()`'s split from its timer
-layer); `rescheduleToday()` was the thin `UNUserNotificationCenter` side
-effect on top, untestable the same way `VerseScheduler`'s
-`DispatchSourceTimer` firing is. All three of this section's triggers
-were wired through a single mechanism: `PrayerNotificationScheduler.start()`
-subscribed to `settingsStore.$settings`, whose `@Published` publisher
-replays its current value to a brand-new subscriber — covering "app
-launch" for free — and fired again on every later settings change; a
-self-rearming `DispatchSourceTimer` (same style as `VerseScheduler`'s
-display timer) covered the local-midnight rollover.
+`prayerAlertEvents(...)` is the pure, synchronous "what to show" half —
+`nonisolated`, fully unit-tested, and split from the timer exactly as
+`VerseScheduler.selectNextVerses()` is. It produces one at-time event per
+prayer for Fajr, Dhuhr, Asr, Maghrib and Isha (sunrise is excluded; it is not
+a prayer), plus one reminder event that many minutes earlier when a reminder
+is configured, skipping any event whose fire date has already passed. Nothing
+is registered with the OS, so there are no notification identifiers and no
+per-day dedupe key to maintain.
 
-**Update: superseded — prayer alerts now render in the notch itself,
-not as OS notifications.** `PrayerNotificationScheduler` and its tests
-were deleted outright; `Packages/AyahKit/Sources/AyahKit/Scheduling/
-{PrayerAlertEvent,PrayerAlertScheduler}.swift` replace them, colocated
-with `VerseScheduler` as a peer scheduler rather than kept in a
-`Notifications/` folder that no longer applies. This was a deliberate
-product decision, not a bug fix, made while diagnosing why alerts
-weren't firing: `UNUserNotificationCenter` permission for Ayah was Off
-at the OS level, and separately, the actually-desired behavior turned
-out to be a notch popup like the verse display, not a system banner —
-so the fix was to stop depending on OS notification permission at all.
+Two settings gate it, both reused unchanged from an earlier
+`UNUserNotificationCenter`-based design and therefore **named for a mechanism
+that no longer exists**: `AppSettings.arePrayerNotificationsEnabled` (off by
+default, matching §12's explicit-opt-in precedent) and
+`AppSettings.prayerNotificationReminderMinutes` (0/5/10/15 in the Settings UI;
+`0` means at the exact prayer time only). Renaming them would be a settings
+schema migration, which is why they still read as "notifications".
 
-Because there is no OS handoff left to fire anything while Ayah isn't
-running, `PrayerAlertScheduler` must self-time every individual
-reminder/at-time moment rather than delegating to
-`UNCalendarNotificationTrigger`: `armNextTimer()` computes today's and
-tomorrow's reminder/at-time events fresh on every arm (via
-`prayerAlertEvents(...)`, the same pure "what to show" split
-`notificationRequests(...)` used, now returning a `PrayerAlertEvent`
-rather than pre-baked notification text — no identifier or per-day
-dedupe key is needed either, since nothing is registered with the OS to
-dedupe against), takes the single soonest one across both days, and
-arms exactly one `DispatchSourceTimer` for it; firing invokes the
-callback and immediately rearms for the next event. There is no
-dedicated midnight-rollover timer any more — recomputing fresh on every
-arm naturally rolls into tomorrow once today's events are exhausted.
-The one gap that leaves — an already-armed deadline silently passing
-while the Mac is asleep — is covered by `NotchController` calling
-`PrayerAlertScheduler.rearm()` on `NSWorkspace.didWakeNotification`,
-not a periodic timer.
+Each fired alert carries the prayer name, a short Arabic message, and a Quran
+ayah containing "الصلاة" that rotates on every firing.
+`QuranRepository.randomAyah(searchableTextContains:)` filters `searchable_text`
+and returns that row's `uthmanic_text` for display — see §7 for why matching
+against `uthmanic_text` directly cannot work. `PrayerAlertScheduler` resolves
+the ayah at fire time and hands the callback a `PrayerAlertDisplay` bundling
+it with the `PrayerAlertEvent`, keeping the split where schedulers own "what
+to show" and the view model only republishes.
 
-`AppSettings.arePrayerNotificationsEnabled`/`prayerNotificationReminderMinutes`
-are reused unchanged (same toggle/picker in the Settings popover), but
-turning the toggle on no longer triggers any OS permission prompt —
-alerts are shown entirely in-process. Each fired alert (reminder and
-at-time alike) carries the prayer name, a short Arabic message, and a
-Quran ayah containing "الصلاة" that rotates every firing —
-`QuranRepository.randomAyah(searchableTextContains:)` filters
-`searchable_text` (never `uthmanic_text`, which can't substring-match a
-plain-spelled word like this — see the Architecture section of
-`CLAUDE.md` for why) and returns that row's `uthmanic_text` for display,
-per this project's display-text rule. `PrayerAlertScheduler` resolves
-the ayah at fire time and bundles it with the `PrayerAlertEvent` into a
-`PrayerAlertDisplay` handed to its callback, matching the existing split
-where schedulers own "what to show" and the view model just republishes.
-`NotchViewModel` represents this alongside verse display through a
-single `@Published content: NotchDisplayContent` enum (`.none`/
-`.verses`/`.prayerAlert`) rather than a second parallel optional —
-`VerseScheduler` and `PrayerAlertScheduler` are two independent timers
-that can each fire while the notch is already expanded showing the
-other's content, and the enum makes "exactly one active kind" true by
-construction. Both card types share the same top safe-zone padding (see
-§3) and 12-second auto-collapse.
+`NotchViewModel` represents this alongside verse display through a single
+`@Published content: NotchDisplayContent` enum (`.none` / `.verses` /
+`.prayerAlert`) rather than two parallel optionals. `VerseScheduler` and
+`PrayerAlertScheduler` are independent timers that can each fire while the
+notch is already expanded showing the other's content, and the enum makes
+"exactly one active kind, or none" true by construction instead of requiring
+an ad hoc priority rule. Both card types share the same top safe-zone padding
+(§3) and auto-collapse delay.
 
-Non-notch Macs get the same prayer alerts as notched ones — see §4's
-floating-bar fallback, which starts `PrayerAlertScheduler` (and
-`VerseScheduler`) exactly the same way the physical-notch path does. This
-supersedes an earlier gap where `PrayerAlertScheduler` was only ever
-started from the physical-notch path and so structurally never ran at all
-without a notch. Location resolution still reuses
-`prayerLocationSource`/`selectedCityID`/`currentLocationCoordinates`
-directly (§12), the same way it backed the deleted scheduler and still
-backs the Settings popover's live prayer-time preview.
+Location resolution goes through `PrayerLocationResolver` (§9), the same
+single path the Settings popover's live prayer-time preview uses, so shown
+times and alert times cannot disagree. Non-notch Macs get identical alerts
+via §4's floating-bar fallback, which starts this scheduler exactly as the
+physical-notch path does.
 
 ## 14. Launch at login
 
@@ -659,7 +627,7 @@ addition beyond the base sandbox entitlement. It's opt-in at the UI level
 or any other entitlement; verify with `codesign -d --entitlements :-` on
 the built app after touching anything here, same as before.
 
-The 1.0.1 Release configuration is arm64-only and disables Xcode's base
+The Release configuration is arm64-only and disables Xcode's base
 entitlement injection. Release packaging requires an ad-hoc signature with
 hardened runtime and exactly the sandbox/location entitlement pair; a
 `get-task-allow` or network entitlement is a hard failure. Because there is
@@ -770,6 +738,13 @@ needs.
   ayahs within the same surah (or within the memorization set's own
   range), so a display never spills across a surah boundary. See
   "Verses per display" below.
+- **`PrayerLocationResolver`** — the single decision point for which
+  coordinates and timezone prayer times are computed for, given
+  `AppSettings` and the bundled `LocationRepository`. Pure and
+  synchronous; takes `AppSettings` by value rather than `SettingsStore`,
+  so no Combine or persistence is involved. Both the Settings popover and
+  `PrayerAlertScheduler` go through it — see §9 for why they must not
+  each carry their own copy.
 - **`PrayerCalculator`** — wraps Adhan Swift, applies the Ramadan Isha
   adjustment (§10), and pairs with `LocationRepository` for the bundled
   city dataset.
@@ -890,15 +865,15 @@ designed when reached.
   Asr-madhab logic and `LocationRepository`'s bundled-data lookups are
   covered by unit tests; `swift test` passes.
 
-**Local notification scheduling, Settings UI, launch-at-login, an
-initial performance measurement pass, and a first security review have
-all since been built/run** — see the "Prayer notifications", "Settings
-UI", "Launch at login", "Performance measurement", and "First security
-review" narrative sections of `CLAUDE.md`'s "Build order / current
-stage"; §13 above for the notification architecture, §14 for
-launch-at-login, §18 above (with its "Measured" addendum) for the
-performance numbers, and `SECURITY.md`'s "Security posture (verified
-2026-08-22)" section for the security review's findings and evidence.
+**Everything after Stage 6 has been built**: the Settings UI and
+memorization-set management, prayer alerts, launch-at-login, a
+performance measurement pass, security review, the Quran supply-chain
+hardening, the non-notch fallback, and both test suites. §13 above
+describes the prayer-alert architecture, §14 launch-at-login, §18 (with
+its "Measured" addendum) the performance numbers, and `SECURITY.md`'s
+"Security posture" section the review's findings and evidence.
+`docs/history/BUILD_LOG.md` holds the chronological account of how each
+was built, as a frozen record.
 
 **Later stages (headings only, to be detailed when reached):**
 Themes (white / beige-Mushaf / black) · Developer ID/notarization if the
@@ -906,9 +881,8 @@ project later joins the Apple Developer Program.
 
 ## Continuous integration
 
-**Quran-specific CI is implemented**: `.github/workflows/quran-integrity.yml`
-(`runs-on: macos-14`), scoped exactly to the two items originally planned
-here plus the full AyahKit suite:
+`.github/workflows/quran-integrity.yml` (`runs-on: macos-15`) runs on every
+push and pull request:
 
 - **quran-integrity**: builds and runs `Scripts/verify_quran` against the
   committed `Resources/Quran` (structural checks, checksum, and the
@@ -926,6 +900,11 @@ here plus the full AyahKit suite:
   human reviewer checking the live page) and does not itself re-run the
   import from the original source — both documented as trust-sensitive in
   `SECURITY.md`, not silently assumed solved.
+- **app tests**: `xcodebuild test` (Debug) against the `Ayah` scheme,
+  running the `AyahTests` target — the App target's own suite, covering
+  `NotchViewModel`'s state machine. Separate from the AyahKit step above
+  because it is app-hosted: the bundle is injected into a real `Ayah`
+  process, so it needs a full Xcode build rather than `swift test`.
 
 The same job now builds the Release app with automatic package resolution
 disabled, using the reviewed workspace `Package.resolved`. Hosted CI still

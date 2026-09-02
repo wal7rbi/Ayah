@@ -117,7 +117,7 @@ struct PopoverContentView: View {
             }
             .padding(12)
         }
-        .frame(width: 320, height: 620)
+        .frame(width: PopoverMetrics.contentSize.width, height: PopoverMetrics.contentSize.height)
         .environment(\.layoutDirection, .rightToLeft)
         .multilineTextAlignment(.trailing)
     }
@@ -224,14 +224,14 @@ struct PopoverContentView: View {
                 currentLocationRow
             }
 
-            if let times = todaysPrayerTimes {
+            if let location = resolvedLocation, let times = todaysPrayerTimes(at: location) {
                 VStack(alignment: .leading, spacing: 3) {
-                    prayerRow("الفجر", times.fajr, in: activeTimeZoneIdentifier)
-                    prayerRow("الشروق", times.sunrise, in: activeTimeZoneIdentifier)
-                    prayerRow("الظهر", times.dhuhr, in: activeTimeZoneIdentifier)
-                    prayerRow("العصر", times.asr, in: activeTimeZoneIdentifier)
-                    prayerRow("المغرب", times.maghrib, in: activeTimeZoneIdentifier)
-                    prayerRow("العشاء", times.isha, in: activeTimeZoneIdentifier)
+                    prayerRow("الفجر", times.fajr, in: location.timeZone)
+                    prayerRow("الشروق", times.sunrise, in: location.timeZone)
+                    prayerRow("الظهر", times.dhuhr, in: location.timeZone)
+                    prayerRow("العصر", times.asr, in: location.timeZone)
+                    prayerRow("المغرب", times.maghrib, in: location.timeZone)
+                    prayerRow("العشاء", times.isha, in: location.timeZone)
                 }
                 .font(.caption)
                 .padding(.top, 2)
@@ -344,11 +344,11 @@ struct PopoverContentView: View {
         }
     }
 
-    private func prayerRow(_ label: String, _ date: Date, in timeZoneIdentifier: String) -> some View {
+    private func prayerRow(_ label: String, _ date: Date, in timeZone: TimeZone) -> some View {
         HStack {
             Text(label)
             Spacer()
-            Text(Self.formattedTime(date, timeZoneIdentifier: timeZoneIdentifier))
+            Text(Self.formattedTime(date, timeZone: timeZone))
                 .foregroundStyle(.secondary)
         }
     }
@@ -358,53 +358,37 @@ struct PopoverContentView: View {
         return locationRepository?.city(id: id)
     }
 
-    /// A bundled city carries its own IANA timezone. A one-shot current
-    /// location caches the Mac's IANA zone at fetch time so later travel
-    /// does not reinterpret the old coordinates on a different day.
-    private var activeTimeZoneIdentifier: String {
-        switch settingsStore.settings.prayerLocationSource {
-        case .city:
-            return selectedCity?.timeZoneIdentifier ?? TimeZone.current.identifier
-        case .currentLocation:
-            return settingsStore.settings.currentLocationTimeZoneIdentifier ?? TimeZone.current.identifier
-        }
+    /// The one shared answer to "which location are prayer times for?",
+    /// so what this popover shows and when `PrayerAlertScheduler` fires
+    /// can never disagree — see `PrayerLocationResolver`.
+    ///
+    /// Nil means the location can't be resolved (no city picked, no
+    /// cached fix, or a selected city whose stored IANA identifier no
+    /// longer parses). The prayer-times block then renders its
+    /// "pick a location" prompt rather than times silently computed in
+    /// the Mac's own zone, which would be indistinguishable from correct
+    /// output.
+    private var resolvedLocation: ResolvedPrayerLocation? {
+        PrayerLocationResolver.resolve(
+            settings: settingsStore.settings,
+            locationRepository: locationRepository
+        )
     }
 
-    /// `AyahKit.Coordinates` is ambiguous with `Adhan.Coordinates` in this
-    /// file (both modules are imported) and can't be module-qualified —
-    /// see the `AyahKit.swift` marker-enum note in the Architecture
-    /// section of CLAUDE.md / `PrayerCalculatorTests.swift`. Resolving
-    /// `coordinates` from a `let` here (rather than a separately
-    /// `Coordinates`-typed property) lets inference carry the concrete
-    /// type through without ever spelling the ambiguous name.
-    private var todaysPrayerTimes: Adhan.PrayerTimes? {
-        let timeZone = TimeZone(identifier: activeTimeZoneIdentifier) ?? .current
-        switch settingsStore.settings.prayerLocationSource {
-        case .city:
-            guard let coordinates = selectedCity?.coordinates else { return nil }
-            return PrayerCalculator.prayerTimes(
-                on: Date(),
-                coordinates: coordinates,
-                calculationMethod: settingsStore.settings.prayerCalculationMethod,
-                asrMadhab: settingsStore.settings.asrMadhab,
-                timeZone: timeZone
-            )
-        case .currentLocation:
-            guard let coordinates = settingsStore.settings.currentLocationCoordinates else { return nil }
-            return PrayerCalculator.prayerTimes(
-                on: Date(),
-                coordinates: coordinates,
-                calculationMethod: settingsStore.settings.prayerCalculationMethod,
-                asrMadhab: settingsStore.settings.asrMadhab,
-                timeZone: timeZone
-            )
-        }
+    private func todaysPrayerTimes(at location: ResolvedPrayerLocation) -> Adhan.PrayerTimes? {
+        PrayerCalculator.prayerTimes(
+            on: Date(),
+            coordinates: location.coordinates,
+            calculationMethod: settingsStore.settings.prayerCalculationMethod,
+            asrMadhab: settingsStore.settings.asrMadhab,
+            timeZone: location.timeZone
+        )
     }
 
-    private static func formattedTime(_ date: Date, timeZoneIdentifier: String) -> String {
+    private static func formattedTime(_ date: Date, timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ar")
-        formatter.timeZone = TimeZone(identifier: timeZoneIdentifier)
+        formatter.timeZone = timeZone
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }

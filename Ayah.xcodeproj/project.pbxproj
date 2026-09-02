@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0731D02FE59F33D238DCE8DE /* uthmanic_hafs_v20.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 97CE3AD31A53B65BC8F46AD2 /* uthmanic_hafs_v20.ttf */; };
+		0DF1B0075B8F5FF404B3B7BF /* LayoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA90BFC52B3F5CA205FDE4F /* LayoutMetrics.swift */; };
 		1147415D8712AC55968883D9 /* cities_filtered.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = F5D596447417074595E65CD1 /* cities_filtered.sqlite */; };
 		18181B7DA890270B2C2FA533 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E010835F9D5B0E30E89A67 /* StatusItemController.swift */; };
 		1DD6BFDD2E0418CB353856B1 /* ACKNOWLEDGEMENTS.txt in Resources */ = {isa = PBXBuildFile; fileRef = 38E824A0F46FC90293F329D2 /* ACKNOWLEDGEMENTS.txt */; };
@@ -17,6 +18,7 @@
 		3101574F137C173484881450 /* quran.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = EF9B85C799A33D1B5DBDB1AC /* quran.sqlite */; };
 		42A2819A8249778AA40C51CC /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC06B06CFB4CAB084A7B7616 /* AboutView.swift */; };
 		44A723E52FD96128B35EB340 /* AyahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEFCEE357204FFE1D8C17BA /* AyahApp.swift */; };
+		47005D3FE4BD86B7E599C39C /* NotchViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67617C8E9CD8A284C853CF40 /* NotchViewModelTests.swift */; };
 		4D7238AC4C1C2DA9A98491BC /* AyahKit in Frameworks */ = {isa = PBXBuildFile; productRef = 67EF8F75BBD19F716D6EB57C /* AyahKit */; };
 		52C7FA0AA1C3C8BDA84260E7 /* CityPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19785C955C6C96C878C88725 /* CityPickerView.swift */; };
 		52CFA92433A51223F53885DB /* MemorizationSetEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51666202A9967D1F04421693 /* MemorizationSetEditorView.swift */; };
@@ -31,6 +33,7 @@
 		9BC9667097AB6D17377D9BA9 /* NotchPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884E5B404FAD67AC70337B91 /* NotchPanel.swift */; };
 		A174C0DCEBCEEFB229E06725 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF67BF538C3506021516142 /* AboutWindowController.swift */; };
 		A5A0A713530CC060DC500496 /* GEONAMES_CHECKSUM in Resources */ = {isa = PBXBuildFile; fileRef = 8946D4130E84A4FBF29A07E4 /* GEONAMES_CHECKSUM */; };
+		B30CC881C44777557350875B /* AppLaunchGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */; };
 		D01968525E5CEC690830C219 /* MemorizationSetsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3292EF9A8BF28D56BD655BAA /* MemorizationSetsWindowController.swift */; };
 		D7097B106EC2EC5C13F595BA /* NotchDisplayContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9D150655D8E9093225677F /* NotchDisplayContent.swift */; };
 		E9E5D1D6C77ADDE1F0F6D09E /* AppPerformanceSignposts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925E846D7F1449DBF6E55472 /* AppPerformanceSignposts.swift */; };
@@ -38,6 +41,16 @@
 		F76AFEF410EB14542CF9FF9A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6122F45F4BFB78489EB301F6 /* Assets.xcassets */; };
 		FF9AB1A5CC213845C9D52425 /* Adhan-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = C46E1DD26C1242E272A211F8 /* Adhan-LICENSE.txt */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C6095E47E5090C7FD244A6F8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 107F8519758E44579862C315 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 244A0EE56A0B6FE2EEC47604;
+			remoteInfo = Ayah;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		00FEC0C81DF711C617446929 /* GeoNames-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "GeoNames-NOTICE.txt"; sourceTree = "<group>"; };
@@ -49,14 +62,17 @@
 		319612040E83816104527AAA /* Ayah.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ayah.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3292EF9A8BF28D56BD655BAA /* MemorizationSetsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorizationSetsWindowController.swift; sourceTree = "<group>"; };
 		38E824A0F46FC90293F329D2 /* ACKNOWLEDGEMENTS.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ACKNOWLEDGEMENTS.txt; sourceTree = "<group>"; };
+		41B65C70E50ED2F7DBD4F85F /* AyahTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AyahTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C3F1DD252F844CDF317AE9C /* AyahKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AyahKit; path = Packages/AyahKit; sourceTree = SOURCE_ROOT; };
 		51666202A9967D1F04421693 /* MemorizationSetEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorizationSetEditorView.swift; sourceTree = "<group>"; };
 		6122F45F4BFB78489EB301F6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		67617C8E9CD8A284C853CF40 /* NotchViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchViewModelTests.swift; sourceTree = "<group>"; };
 		6D4F90D25B2E03E885AA831F /* MemorizationSetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorizationSetsView.swift; sourceTree = "<group>"; };
 		6EEFCEE357204FFE1D8C17BA /* AyahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahApp.swift; sourceTree = "<group>"; };
 		884E5B404FAD67AC70337B91 /* NotchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchPanel.swift; sourceTree = "<group>"; };
 		8946D4130E84A4FBF29A07E4 /* GEONAMES_CHECKSUM */ = {isa = PBXFileReference; path = GEONAMES_CHECKSUM; sourceTree = "<group>"; };
 		8C30F43BEC99AFD9CC437579 /* NotchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchContentView.swift; sourceTree = "<group>"; };
+		8DA90BFC52B3F5CA205FDE4F /* LayoutMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutMetrics.swift; sourceTree = "<group>"; };
 		9226FE0B202387573E1E8102 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		925E846D7F1449DBF6E55472 /* AppPerformanceSignposts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPerformanceSignposts.swift; sourceTree = "<group>"; };
 		97CE3AD31A53B65BC8F46AD2 /* uthmanic_hafs_v20.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = uthmanic_hafs_v20.ttf; sourceTree = "<group>"; };
@@ -66,6 +82,7 @@
 		C46E1DD26C1242E272A211F8 /* Adhan-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Adhan-LICENSE.txt"; sourceTree = "<group>"; };
 		CC06B06CFB4CAB084A7B7616 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		DCF67BF538C3506021516142 /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
+		DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLaunchGuardTests.swift; sourceTree = "<group>"; };
 		E25D63AEBE385EE4B7220F16 /* PopoverContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverContentView.swift; sourceTree = "<group>"; };
 		E45F4D23C30DF24E917974C9 /* NotchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchViewModel.swift; sourceTree = "<group>"; };
 		EF9B85C799A33D1B5DBDB1AC /* quran.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = quran.sqlite; sourceTree = "<group>"; };
@@ -94,6 +111,14 @@
 			path = GeoNames;
 			sourceTree = "<group>";
 		};
+		0BF91D24A1CD34F4A7C62E60 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				528CBD0A339991206BD7414D /* App */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
 		0C37189AB32DFB99863D9F44 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
@@ -118,6 +143,7 @@
 				9F56059D57FAEB21E8A11C8A /* App */,
 				29CE5CEC12FC1261D2C67FCC /* Packages */,
 				915F1346B61E1C36B34B2002 /* Resources */,
+				0BF91D24A1CD34F4A7C62E60 /* Tests */,
 				EB6DDC08AA2A91FD7AC6D5E7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -137,6 +163,15 @@
 				4C3F1DD252F844CDF317AE9C /* AyahKit */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		528CBD0A339991206BD7414D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */,
+				67617C8E9CD8A284C853CF40 /* NotchViewModelTests.swift */,
+			);
+			path = App;
 			sourceTree = "<group>";
 		};
 		5FFF64795B00A03B8A78CD3F /* Prayer */ = {
@@ -161,6 +196,7 @@
 		724E2CA21C5E07D359772852 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				8DA90BFC52B3F5CA205FDE4F /* LayoutMetrics.swift */,
 				AD04FAC3B46AA503399C67CA /* About */,
 				0F54F2EFF0AABF7EB5B1D6A8 /* Memorization */,
 				1DDE5B6B717D373AFDF9C71F /* MenuBar */,
@@ -246,6 +282,7 @@
 			isa = PBXGroup;
 			children = (
 				319612040E83816104527AAA /* Ayah.app */,
+				41B65C70E50ED2F7DBD4F85F /* AyahTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -273,6 +310,25 @@
 			productName = Ayah;
 			productReference = 319612040E83816104527AAA /* Ayah.app */;
 			productType = "com.apple.product-type.application";
+		};
+		981BCFFE1E4904116CF89B83 /* AyahTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BE0124CD847E1E7C587D0FEA /* Build configuration list for PBXNativeTarget "AyahTests" */;
+			buildPhases = (
+				E7D780503A4D359319454C5E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DD4BAB965C363D5DC33E0CE6 /* PBXTargetDependency */,
+				D8C4E1F5AC4FE139BD231202 /* PBXTargetDependency */,
+			);
+			name = AyahTests;
+			packageProductDependencies = (
+			);
+			productName = AyahTests;
+			productReference = 41B65C70E50ED2F7DBD4F85F /* AyahTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -306,6 +362,7 @@
 			projectRoot = "";
 			targets = (
 				244A0EE56A0B6FE2EEC47604 /* Ayah */,
+				981BCFFE1E4904116CF89B83 /* AyahTests */,
 			);
 		};
 /* End PBXProject section */
@@ -365,6 +422,7 @@
 				6BC6B456C60A644082C41B01 /* CityPickerWindowController.swift in Sources */,
 				22BD6619CBC5C1E915327D6E /* CurrentLocationViewModel.swift in Sources */,
 				88AF0B4D3A382E6DC6A9448A /* LaunchAtLoginViewModel.swift in Sources */,
+				0DF1B0075B8F5FF404B3B7BF /* LayoutMetrics.swift in Sources */,
 				52CFA92433A51223F53885DB /* MemorizationSetEditorView.swift in Sources */,
 				8D32CE0A2DF2F2783D7DA6E8 /* MemorizationSetsView.swift in Sources */,
 				D01968525E5CEC690830C219 /* MemorizationSetsWindowController.swift in Sources */,
@@ -379,7 +437,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E7D780503A4D359319454C5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B30CC881C44777557350875B /* AppLaunchGuardTests.swift in Sources */,
+				47005D3FE4BD86B7E599C39C /* NotchViewModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D8C4E1F5AC4FE139BD231202 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = "TEMP_20807D73-095A-4676-9A49-5DB6AE8D4D54" /* AyahKit */;
+		};
+		DD4BAB965C363D5DC33E0CE6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 244A0EE56A0B6FE2EEC47604 /* Ayah */;
+			targetProxy = C6095E47E5090C7FD244A6F8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		409756DDEBB3EACA6B358BAE /* Release */ = {
@@ -450,7 +529,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -459,7 +538,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
@@ -541,7 +620,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -550,13 +629,51 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		C0D727F41B05D1D382FE2C1C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.AyahTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ayah.app/Contents/MacOS/Ayah";
+			};
+			name = Debug;
+		};
+		F5589E0ED5C233E756D52286 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.AyahTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ayah.app/Contents/MacOS/Ayah";
+			};
+			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
@@ -579,6 +696,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		BE0124CD847E1E7C587D0FEA /* Build configuration list for PBXNativeTarget "AyahTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0D727F41B05D1D382FE2C1C /* Debug */,
+				F5589E0ED5C233E756D52286 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -590,6 +716,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		67EF8F75BBD19F716D6EB57C /* AyahKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AyahKit;
+		};
+		"TEMP_20807D73-095A-4676-9A49-5DB6AE8D4D54" /* AyahKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AyahKit;
 		};

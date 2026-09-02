@@ -11,9 +11,9 @@ Everything Ayah stores lives only on your Mac, in your user account, and is
 never transmitted anywhere:
 
 - **App preferences** — verse display interval, verses shown per display,
-  memorization weighting, selected city, prayer calculation method, Asr
-  calculation method, prayer-notification toggle and lead time. Stored via
-  `UserDefaults`.
+  memorization weighting, prayer location source, selected city, prayer
+  calculation method, Asr calculation method, and the prayer-alert toggle
+  and reminder lead time. Stored via `UserDefaults` under a single key.
 - **Current-location coordinates and time zone**, if you explicitly opt into "استخدام
   الموقع الحالي" (use current location) as your prayer-time input instead
   of picking a city — see "Location" below. The last-fetched coordinates
