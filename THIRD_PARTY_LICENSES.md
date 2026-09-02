@@ -100,8 +100,10 @@ this file remains the complete legal and provenance record.
 - **Used for**: the bundled offline city → coordinates → timezone lookup
   used for manual city selection in prayer time calculation.
 - **Status**: Clean. Redistribution is explicitly permitted with
-  attribution. Ayah bundles only a filtered subset (Saudi Arabia and other
-  Muslim-majority countries initially), not the full world dataset.
+  attribution. Ayah bundles only a filtered subset — 4,659 cities across
+  49 Muslim-majority countries, kept where population ≥ 15,000 or the
+  city is a national capital — not the full world dataset. See
+  `Resources/GeoNames/SOURCE.md` for the exact filter and country list.
   Attribution: "Geographic data © GeoNames.org contributors, CC BY 4.0."
   The attribution and license link are bundled as
   `Resources/ThirdParty/GeoNames-NOTICE.txt`.

@@ -16,10 +16,10 @@ never transmitted anywhere:
   and reminder lead time. Stored via `UserDefaults` under a single key.
 - **Current-location coordinates and time zone**, if you explicitly opt into "استخدام
   الموقع الحالي" (use current location) as your prayer-time input instead
-  of picking a city — see "Location" below. The last-fetched coordinates
-  fetch time, and the Mac's IANA time-zone identifier at fetch time are
-  cached via `UserDefaults` so the app doesn't need to ask again on every
-  launch or reinterpret an old fix after travel.
+  of picking a city — see "Location" below. The last-fetched coordinates,
+  the time they were fetched, and the Mac's IANA time-zone identifier at
+  that moment are cached via `UserDefaults` so the app doesn't need to ask
+  again on every launch or reinterpret an old fix after travel.
 - **Memorization sets** — the surah/ayah ranges you've chosen to memorize,
   their enabled/disabled state, and repetition mode. Stored in a small local
   SQLite database in Ayah's sandbox container.

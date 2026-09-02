@@ -21,6 +21,11 @@ were re-confirmed on 2026-09-01 against a freshly built app after the
 prayer-location, layout, test-target, and GeoNames-importer changes of that
 day; none of them altered the app's security posture.
 
+This review still describes the **published 1.0.2 build** (tag `v1.0.2`,
+revision `a35e112`): the only commit between the reviewed revision and the
+tag changed `README.md` and two files under `docs/release/`, and touched no
+source, resource, entitlement, or build-configuration file.
+
 - **App Sandbox**: on. `App/Ayah.entitlements` requests exactly two keys —
   `com.apple.security.app-sandbox` and
   `com.apple.security.personal-information.location` (added deliberately

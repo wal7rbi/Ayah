@@ -5,7 +5,7 @@ Quran verses from the MacBook notch area, helps memorize selected verses,
 and calculates Islamic prayer times entirely offline with in-notch prayer
 alerts while the app is running.
 
-**Status: 1.0.2, approved and tagged.** Ayah is available as an open-source,
+**Status: 1.0.2, published.** Ayah is available as an open-source,
 unnotarized macOS app. The release policy does not use an Apple Developer
 account, Developer ID, or notarization; review the installation steps below
 before downloading.
@@ -76,11 +76,40 @@ the standard uncluttered layout: drag **Ayah** to **Applications**. License and
 source acknowledgements are bundled inside the app and can be opened from
 **حول التطبيق**.
 
+## Building from source
+
+Ayah has no external build dependencies beyond Xcode and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). `Ayah.xcodeproj` is
+generated from `project.yml`, so regenerate it after pulling and after adding
+any new source file:
+
+```sh
+xcodegen generate
+xcodebuild -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' build
+```
+
+There are two test suites, and they run differently — the first is fast and
+headless, the second is app-hosted:
+
+```sh
+cd Packages/AyahKit && swift test
+xcodebuild test -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' -configuration Debug
+```
+
+A **Release** build additionally runs `Scripts/verify_quran` and the full
+AyahKit suite as a pre-build gate, so shipping a Release binary against
+unverified Quran data is not possible. Debug builds skip it.
+
+Ayah is an `LSUIElement` app with no Dock icon; quit it from the menu-bar
+popover's **إغلاق آية** button rather than Cmd-Q. `CONTRIBUTING.md` has the
+ground rules, and `CLAUDE.md` documents the non-obvious build and runtime
+pitfalls this project has already paid for.
+
 ## Documentation
 
 - **`ARCHITECTURE.md`** — full technical design: notch UI approach, data
   model, module boundaries, prayer-calculation details, scheduling
-  strategy, and the phased build plan
+  strategy, and the rationale behind each decision
 - **`PRIVACY.md`** — exactly what's stored locally and how offline
   operation is architecturally enforced
 - **`SECURITY.md`** — sandbox/entitlement posture and how to report a
@@ -92,8 +121,11 @@ source acknowledgements are bundled inside the app and can be opened from
   pipeline
 - **`docs/history/BUILD_LOG.md`** — a frozen record of how each piece was
   built, kept for the "why was it done this way" question; not maintained
-- **`docs/release/`** — the stable-release checklist, bilingual
-  installation instructions, and published GitHub release notes
+- **`docs/release/`** — per-version release notes, the stable-release
+  checklist, the QA approval record with the exact scope of what was and
+  was not verified, and bilingual installation instructions. Published
+  builds live on the
+  [Releases page](https://github.com/wal7rbi/Ayah/releases)
 
 ## License
 

@@ -38,10 +38,15 @@ DerivedData output.
 The app is feature-complete for its scope: notch and menu-bar UI, Quran
 display, memorization sets, prayer times, in-notch prayer alerts,
 launch-at-login, last-shown replay, a non-notch fallback bar, a hardened Quran
-data pipeline, and both test suites. `v1.0.1` is the latest published release;
-`MARKETING_VERSION` is `1.0.2`, whose notes are in
-`docs/release/RELEASE_NOTES_1.0.2.md` and which has not been packaged or
-published yet.
+data pipeline, and both test suites. `v1.0.2` is the latest published release —
+tagged at `a35e112`, packaged as an ad-hoc-signed arm64 DMG, and published on
+GitHub with its `.sha256`. `MARKETING_VERSION` is `1.0.2`, notes in
+`docs/release/RELEASE_NOTES_1.0.2.md`, approval in
+`docs/release/QA_APPROVAL_1.0.2.md`.
+
+The 1.0.2 approval records an operator decision, not a per-item pass: the
+unchecked boxes in `docs/release/RELEASE_CHECKLIST_1.0.2.md` are genuinely
+outstanding and must not be read as verified.
 
 Two things are not built and should not be started without being asked:
 **themes** (white / beige-Mushaf / black), the one remaining optional product
