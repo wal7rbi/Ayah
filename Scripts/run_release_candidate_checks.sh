@@ -341,6 +341,11 @@ if [ -x "$RELEASE_EXECUTABLE" ]; then
 
     awk -F, -v minutes="$IDLE_MINUTES" -v expected="$IDLE_SAMPLE_COUNT" -v report="$IDLE_REPORT" '
         function mib(value, suffix, number) {
+            # top marks a value that changed since the previous sample with a
+            # trailing +/- ("21M+"). Strip it before reading the unit,
+            # otherwise the unit tests below all miss and the value falls
+            # through to the bytes branch, reading 21 MiB as 0.00002 MiB.
+            sub(/[+-]$/, "", value)
             suffix = substr(value, length(value), 1)
             number = value + 0
             if (suffix == "G") return number * 1024
