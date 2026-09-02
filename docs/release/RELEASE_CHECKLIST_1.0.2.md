@@ -11,11 +11,11 @@ alerts, so a 1.0.1 pass is not evidence about this build.
 ## Automated gate
 
 - [ ] Clean release commit with annotated tag `v1.0.2`.
-- [ ] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures.
-- [ ] The gate's `App test suite` and `GeoNames bundled checksum` steps both
+- [x] `Scripts/run_release_candidate_checks.sh --idle-minutes 30 --ui-cycles 200` passes with zero automated failures.
+- [x] The gate's `App test suite` and `GeoNames bundled checksum` steps both
       appear in the report and pass. Both are new in 1.0.2; a report without
       them was produced by a stale script.
-- [ ] `.github/workflows/quran-integrity.yml` passes on the release commit in
+- [x] `.github/workflows/quran-integrity.yml` passes on the release commit in
       GitHub Actions, observed in the web UI — not inferred from a local run.
       This includes the App test step, which has never been observed on a
       hosted runner.
@@ -68,20 +68,26 @@ alerts, so a 1.0.1 pass is not evidence about this build.
 ## Distribution checks
 
 - [ ] Release title, tag, version, and filenames are exactly `1.0.2` / `v1.0.2` / `Ayah-1.0.2-macOS-arm64.dmg`.
-- [ ] The built app reports `1.0.2` / build `3`.
-- [ ] `README.md`'s download button, filename, and `shasum` example all point
+- [x] The built app reports `1.0.2` / build `3`.
+- [x] `README.md`'s download button, filename, and `shasum` example all point
       at 1.0.2. These are deliberately left at 1.0.1 until publication, so
       they must be updated as part of this release.
-- [ ] Release notes clearly state Apple Silicon, macOS 13+, ad-hoc signing, and no notarization.
+- [x] Release notes clearly state Apple Silicon, macOS 13+, ad-hoc signing, and no notarization.
 - [ ] Fresh GitHub download follows the documented Privacy & Security > Open Anyway path.
 - [ ] Installed app launches, opens About, requests location only after user action, and relaunches successfully.
 
 ## Release decision
 
-- Decision: **NOT YET APPROVED**
-- Operator:
-- Approval date:
+- Decision: **APPROVED FOR PUBLICATION**
+- Operator: wal7rbi
+- Approval date: 2026-09-02
 - Apple Developer account: **not used**
 - Signature: ad-hoc with hardened runtime
 - Notarization: none
-- Manual approval record: `QA_APPROVAL_1.0.2.md` (to be written on approval).
+- Manual approval record: `QA_APPROVAL_1.0.2.md`.
+
+The operator approved publication without itemizing which manual checks they
+ran. Every box still unchecked above is genuinely outstanding and this
+approval does not convert any of them into a pass — see
+`QA_APPROVAL_1.0.2.md` for the precise scope of what was and was not
+evidenced.
