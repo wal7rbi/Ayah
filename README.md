@@ -5,7 +5,7 @@ Quran verses from the MacBook notch area, helps memorize selected verses,
 and calculates Islamic prayer times entirely offline with in-notch prayer
 alerts while the app is running.
 
-**Status: 1.0.1, approved and tagged.** Ayah is available as an open-source,
+**Status: 1.0.2, approved and tagged.** Ayah is available as an open-source,
 unnotarized macOS app. The release policy does not use an Apple Developer
 account, Developer ID, or notarization; review the installation steps below
 before downloading.
@@ -48,26 +48,26 @@ architecture, and open-source friendliness.
 
 ## Requirements
 
-Apple Silicon Mac with macOS 13 (Ventura) or later. Version 1.0.1 does not
+Apple Silicon Mac with macOS 13 (Ventura) or later. Version 1.0.2 does not
 include an Intel `x86_64` binary.
 
 ## Installing the unnotarized release
 
-Ayah 1.0.1 is distributed directly as
-`Ayah-1.0.1-macOS-arm64.dmg`. It is ad-hoc signed to preserve bundle
+Ayah 1.0.2 is distributed directly as
+`Ayah-1.0.2-macOS-arm64.dmg`. It is ad-hoc signed to preserve bundle
 integrity, but it has no Apple Developer ID signature and is not notarized.
 macOS will therefore block its first launch as an unidentified-developer
 app. After attempting to open Ayah, use **System Settings > Privacy &
 Security > Open Anyway** for this app. Do not disable Gatekeeper globally.
 
-[![Download Ayah for macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.1-macOS-arm64.dmg)
+[![Download Ayah for macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.2-macOS-arm64.dmg)
 
 The button downloads the current DMG from Ayah's public GitHub Release.
 
 Download the accompanying `.sha256` file and verify the DMG before opening:
 
 ```sh
-shasum -a 256 -c Ayah-1.0.1-macOS-arm64.dmg.sha256
+shasum -a 256 -c Ayah-1.0.2-macOS-arm64.dmg.sha256
 ```
 
 Complete Arabic and English installation instructions remain available in
