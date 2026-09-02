@@ -21,9 +21,16 @@ final class NotchViewModelTests: XCTestCase {
     /// is worth doing once for the whole suite rather than per test.
     private static var sharedQuranRepository: QuranRepository?
 
-    private var temporaryDirectories: [URL] = []
-    private var defaultsSuiteNames: [String] = []
-    private var startedSchedulers: [VerseScheduler] = []
+    // `tearDown()` is nonisolated in XCTestCase, and this class is
+    // @MainActor, so these three cannot be plain isolated properties: Swift
+    // 6.1 rejects touching them from the override. (Swift 6.2 infers the
+    // override's isolation and accepts it, which is exactly why this built
+    // locally and failed in CI.) They are safe without isolation because
+    // XCTest runs setUp, the test, and tearDown serially for each instance,
+    // so nothing here is ever reachable concurrently.
+    nonisolated(unsafe) private var temporaryDirectories: [URL] = []
+    nonisolated(unsafe) private var defaultsSuiteNames: [String] = []
+    nonisolated(unsafe) private var startedSchedulers: [VerseScheduler] = []
 
     override func tearDown() {
         for scheduler in startedSchedulers {

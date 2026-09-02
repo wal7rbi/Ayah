@@ -311,6 +311,16 @@ resources, but SPM preserves symlinks rather than dereferencing them, so the
 relative target broke once copied into the differently-nested bundle
 (`sqlite3_open` failing with `SQLITE_CANTOPEN`).
 
+**A local build is weak evidence for CI: the toolchains are far apart.** This
+Mac runs Xcode 26.3 / Swift 6.2; the `macos-15` runner selects Xcode 16.4 /
+Swift 6.1. Swift 6.2 infers actor isolation for an XCTest override, so a
+`@MainActor` test class whose nonisolated `tearDown()` touches isolated
+properties compiles here and fails on CI. That exact mistake has already
+cost one red run. When a change leans on recent concurrency behaviour, treat
+CI as the authority and expect to iterate there; the properties in
+`NotchViewModelTests` are `nonisolated(unsafe)` for this reason, which is
+sound because XCTest runs setUp, the test, and tearDown serially.
+
 **AyahKit is linked into `AyahTests` with `link: false`.** It builds as a static
 library, so linking it into the test bundle as well as the host app would give
 the two modules separate, mutually incompatible copies of every AyahKit type,
