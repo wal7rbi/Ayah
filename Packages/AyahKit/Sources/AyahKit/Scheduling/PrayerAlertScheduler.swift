@@ -92,7 +92,12 @@ public final class PrayerAlertScheduler {
         timerSource = nil
 
         guard settingsStore.settings.arePrayerNotificationsEnabled,
-              let (coordinates, timeZone) = resolveLocation() else { return }
+              let location = PrayerLocationResolver.resolve(
+                  settings: settingsStore.settings,
+                  locationRepository: locationRepository
+              ) else { return }
+        let coordinates = location.coordinates
+        let timeZone = location.timeZone
 
         let settings = settingsStore.settings
         let referenceNow = now()
@@ -133,31 +138,6 @@ public final class PrayerAlertScheduler {
         }
         timer.resume()
         timerSource = timer
-    }
-
-    /// Same city/current-location switch `PrayerNotificationScheduler`
-    /// used (and, before that, `PopoverContentView`'s live prayer-time
-    /// preview) — duplicated here rather than shared, matching that
-    /// file's own precedent. Now also resolves a `TimeZone` alongside
-    /// `Coordinates`: `PrayerCalculator.prayerTimes(...)` requires the
-    /// target location's zone (not the Mac's system zone) to compute the
-    /// correct calendar day — see ARCHITECTURE.md §9's "Update". A
-    /// selected city carries its own IANA zone; current-location uses the
-    /// system IANA zone captured with the one-shot coordinates.
-    private func resolveLocation() -> (coordinates: Coordinates, timeZone: TimeZone)? {
-        switch settingsStore.settings.prayerLocationSource {
-        case .city:
-            guard let id = settingsStore.settings.selectedCityID,
-                  let city = locationRepository?.city(id: id),
-                  let timeZone = TimeZone(identifier: city.timeZoneIdentifier) else { return nil }
-            return (city.coordinates, timeZone)
-        case .currentLocation:
-            guard let coordinates = settingsStore.settings.currentLocationCoordinates else { return nil }
-            let identifier = settingsStore.settings.currentLocationTimeZoneIdentifier
-                ?? TimeZone.current.identifier
-            guard let timeZone = TimeZone(identifier: identifier) else { return nil }
-            return (coordinates, timeZone)
-        }
     }
 
     /// Pure and synchronous — the "what to show" half, fully testable

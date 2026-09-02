@@ -19,15 +19,14 @@ struct NotchContentView: View {
     let isPhysicalNotch: Bool
 
     private static let arabicFontName = "kfgqpchafsuthmanicscript-Reg"
-    private static let expandedSize = CGSize(width: 480, height: 220)
 
     var body: some View {
         let shape = self.shape
         return shape
             .fill(.black)
             .frame(
-                width: viewModel.isExpanded ? Self.expandedSize.width : viewModel.collapsedSize.width,
-                height: viewModel.isExpanded ? Self.expandedSize.height : viewModel.collapsedSize.height
+                width: viewModel.isExpanded ? NotchMetrics.expandedSize.width : viewModel.collapsedSize.width,
+                height: viewModel.isExpanded ? NotchMetrics.expandedSize.height : viewModel.collapsedSize.height
             )
             .overlay {
                 if viewModel.isExpanded {
@@ -112,7 +111,7 @@ struct NotchContentView: View {
         // occludes, whatever a given device's notch height is.
         .padding(.top, isPhysicalNotch ? max(20, viewModel.collapsedSize.height + 12) : 20)
         .padding([.horizontal, .bottom], 20)
-        .frame(width: Self.expandedSize.width, height: Self.expandedSize.height)
+        .frame(width: NotchMetrics.expandedSize.width, height: NotchMetrics.expandedSize.height)
         .animation(.easeInOut(duration: 0.35), value: viewModel.content)
     }
 

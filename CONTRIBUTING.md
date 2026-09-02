@@ -1,8 +1,8 @@
 # Contributing to Ayah
 
-Thank you for your interest in Ayah. The project is a working pre-release
-native macOS application. See `ARCHITECTURE.md` for the implemented design,
-`docs/audits/` for the latest verified state, and
+Thank you for your interest in Ayah. See `CLAUDE.md` for the current state,
+commands, and the rules that must not be broken; `ARCHITECTURE.md` for the
+design and its rationale; `docs/audits/` for the latest verified state; and
 `THIRD_PARTY_LICENSES.md` before changing dependencies or bundled data.
 Small fixes with regression coverage are preferred over broad rewrites.
 
@@ -35,6 +35,17 @@ Small fixes with regression coverage are preferred over broad rewrites.
   — `.github/workflows/quran-integrity.yml` flags PRs that touch the data
   without the corresponding metadata bump, and reviewers should treat an
   unexplained Quran-data diff as a reason to slow down, not merge quickly.
+- **GeoNames data is generated too.** `Resources/GeoNames/` comes only from
+  `Scripts/import_geonames`, which writes `cities_filtered.sqlite`,
+  `GEONAMES_CHECKSUM`, and `SOURCE.md` together. Never hand-edit any of
+  them, and never hand-write the checksum: the importer is deterministic,
+  and that is what lets the committed database be independently
+  reproduced.
+- **A new test must be seen to fail before it is trusted.** Invert its
+  assertion, or disable the guard it covers, and confirm it goes red. A
+  test that has never failed is not yet evidence of anything. This is the
+  standard the timezone regression test, the Quran tampering tests, and the
+  `NotchViewModel` suite were each held to.
 - **Keep it simple.** Don't add abstractions, settings, or configuration
   options that don't solve a real, current problem. See the "Major
   implementation risks" and phased build order in `ARCHITECTURE.md` for

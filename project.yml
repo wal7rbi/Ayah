@@ -52,8 +52,8 @@ targets:
         CODE_SIGNING_ALLOWED: YES
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_VERSION: "6.0"
-        MARKETING_VERSION: "1.0.1"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.0.2"
+        CURRENT_PROJECT_VERSION: "3"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
@@ -64,3 +64,31 @@ targets:
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
     dependencies:
       - package: AyahKit
+    # An explicit scheme (rather than xcodebuild's autocreated one) so
+    # `xcodebuild test` runs AyahTests deterministically, locally and in
+    # CI, without depending on scheme autocreation to notice the bundle.
+    scheme:
+      testTargets:
+        - AyahTests
+
+  # App-layer unit tests (`NotchViewModel`'s state machine). Runs under
+  # `xcodebuild test`, not `swift test` — AyahKit keeps its own suite.
+  # Hosted in the Ayah app so `@testable import Ayah` can reach the App
+  # target's internal types; `link: false` on the package keeps AyahKit a
+  # single static copy inside the host, since linking it into the test
+  # bundle too would give the two modules distinct, incompatible copies of
+  # every AyahKit type.
+  AyahTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Tests/App
+    dependencies:
+      - target: Ayah
+      - package: AyahKit
+        link: false
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES

@@ -27,7 +27,11 @@ final class LocationRepositoryPerformanceTests: XCTestCase {
     func testPerformanceRepresentativeEnglishAndArabicCitySearch() throws {
         let repository = try PerformanceTestSupport.makeLocationRepository()
         let cities = repository.cities()
-        XCTAssertEqual(cities.count, 4_654)
+        // Tracks `Resources/GeoNames/SOURCE.md`'s row count. It exists so a
+        // shrunken or substituted fixture can't quietly make this benchmark
+        // measure nothing; a re-import that legitimately changes the row
+        // count is expected to update it here too.
+        XCTAssertEqual(cities.count, 4_659)
 
         func matchingCities(for query: String) -> [City] {
             cities.filter {

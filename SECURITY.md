@@ -12,12 +12,14 @@ the local application itself (e.g. entitlement misconfiguration, unsafe
 file handling, or a dependency vulnerability) rather than a remote attack
 surface.
 
-## Security posture (verified 2026-08-30)
+## Security posture (verified 2026-09-01)
 
-The app shell has existed for a while now, so this section records a real
-review against a built app rather than a design intent — see
-`ARCHITECTURE.md` for the current stage of the project. Verified on macOS
-26.5.2 (arm64), Xcode 26.3, both Debug and local Release configurations.
+This section records a real review against a built app, not a design
+intent. Verified on macOS 26.5.2 (arm64), Xcode 26.3, both Debug and local
+Release configurations. The entitlement, network, and SQL findings below
+were re-confirmed on 2026-09-01 against a freshly built app after the
+prayer-location, layout, test-target, and GeoNames-importer changes of that
+day; none of them altered the app's security posture.
 
 - **App Sandbox**: on. `App/Ayah.entitlements` requests exactly two keys —
   `com.apple.security.app-sandbox` and
@@ -25,7 +27,7 @@ review against a built app rather than a design intent — see
   for the opt-in "use current location" prayer-time convenience; see
   `PRIVACY.md`'s "Location" section). Confirmed against the actual signed
   binary, not just the source entitlements file. Debug builds may include
-  `com.apple.security.get-task-allow`; the 1.0.1 Release configuration sets
+  `com.apple.security.get-task-allow`; the Release configuration sets
   `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`, and the packaging gate requires
   the final ad-hoc-signed app to contain exactly the sandbox and location
   keys. Any debug or network entitlement fails packaging. Hardened runtime
@@ -46,25 +48,19 @@ review against a built app rather than a design intent — see
   Camera, or Contacts entitlement/usage-description key exists anywhere.
   Location is the one deliberate exception (see above), using
   `requestWhenInUseAuthorization()` (`CurrentLocationProvider.swift`) —
-  the minimal-scope request, not `requestAlwaysAuthorization()`.
-  **Correction (2026-08-22, found during a later audit pass)**: this
-  section previously cited `Info.plist`'s `NSLocationUsageDescription`
-  string as what backs that call. It doesn't — per Apple's own docs,
-  `requestWhenInUseAuthorization()` requires
-  `NSLocationWhenInUseUsageDescription` specifically, and silently
-  ignores the request (no dialog, no delegate callback) if that key is
-  absent. It was absent. This meant the "استخدام الموقع الحالي" flow
-  never actually prompted — `CurrentLocationViewModel.fetchCurrentLocation()`
-  hung indefinitely, spinner and all, with no visible failure. Fixed by
-  adding `NSLocationWhenInUseUsageDescription` (same Arabic disclosure
-  text) alongside the pre-existing legacy key. Verified against a fresh
-  local build: the real macOS "Ayah would like to use your current
-  location" system dialog now appears, carrying that disclosure text —
-  it did not before this fix. This is exactly the kind of
-  wrong-key-cited-as-evidence mistake a security review can make by
-  reading the code's intent rather than checking the actual OS
-  requirement — worth remembering when reviewing any future
-  permission-prompt-triggering code.
+  the minimal-scope request, not `requestAlwaysAuthorization()`. That call
+  is backed by `Info.plist`'s `NSLocationWhenInUseUsageDescription`, which
+  is the key it specifically requires; verified against a fresh build by
+  triggering the real macOS permission dialog and reading back its Arabic
+  disclosure text.
+  **A lesson worth keeping from how that was found**: an earlier pass of
+  this review cited the legacy `NSLocationUsageDescription` key as the
+  evidence, which does not back that call at all. The key it needs was
+  absent, and macOS silently ignores the request when it is — no dialog,
+  no delegate callback — so the whole "استخدام الموقع الحالي" flow hung
+  with a spinner and no visible failure, and the review had certified it
+  as correct. When reviewing permission-prompt code, check the API's
+  actual documented requirement, not the code's evident intent.
 - **SQL injection surface**: reviewed every raw-SQLite call site
   (`Persistence/SQLiteConnection.swift`, `Quran/QuranRepository.swift`,
   `Prayer/LocationRepository.swift`, `Memorization/MemorizationRepository.swift`).
@@ -81,10 +77,10 @@ review against a built app rather than a design intent — see
   content hash that `QuranRepository` verifies at startup via
   `QuranIntegrityChecker`; `AppDelegate` surfaces a mismatch as a blocking
   `NSAlert` rather than silently showing unverified text (confirmed by
-  reading `AppDelegate.makeQuranRepository()`). **Updated 2026-08-22**:
-  the previously-noted CI gap is now closed at the tooling level —
+  reading `AppDelegate.makeQuranRepository()`). This is verified at three
+  further layers beyond runtime:
   `.github/workflows/quran-integrity.yml` independently re-verifies the
-  checksum (and a new `MANIFEST.json` provenance record) on every push/PR,
+  checksum (and the `MANIFEST.json` provenance record) on every push/PR,
   plus a provenance guard blocking an unexplained `quran.sqlite` change,
   and a Release-only Xcode build gate runs the same check before compiling
   a Release build. See "Quran data supply-chain trust model" below for the
@@ -103,13 +99,19 @@ review against a built app rather than a design intent — see
   column types, coordinate ranges, and IANA time zones, and refuses city
   selection/prayer display if any check fails. The checksum authenticates
   an approved local artifact; it is not an independent upstream signature.
+  `GEONAMES_CHECKSUM` is written by `Scripts/import_geonames` itself, and
+  the importer is deterministic — two runs over the same dump produce
+  byte-identical output — so the committed database can be independently
+  reproduced and checked. It was previously hand-written, which meant it
+  could only detect corruption, never confirm provenance, and any
+  re-import silently produced a database the app refused to load.
 - **Dependencies**: kept intentionally minimal. Adhan Swift (MIT, zero
   dependencies) is the only third-party code dependency, pinned in
   `Packages/AyahKit/Package.resolved` to a specific tagged revision
   (`1.5.0`, commit `a6fa2de...`) rather than a floating branch — see
   `THIRD_PARTY_LICENSES.md`.
 
-**Deliberately not part of the 1.0.1 distribution policy**: Developer ID
+**Deliberately not part of the distribution policy**: Developer ID
 signing and Apple notarization require an Apple Developer Program account.
 Ayah instead produces an arm64, hardened-runtime, ad-hoc-signed DMG and
 documents macOS's per-app Privacy & Security > Open Anyway flow. The fresh,

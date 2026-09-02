@@ -5,7 +5,7 @@ Quran verses from the MacBook notch area, helps memorize selected verses,
 and calculates Islamic prayer times entirely offline with in-notch prayer
 alerts while the app is running.
 
-**Status: 1.0.1 release candidate.** Ayah is available as an open-source,
+**Status: 1.0.1, approved and tagged.** Ayah is available as an open-source,
 unnotarized macOS app. The release policy does not use an Apple Developer
 account, Developer ID, or notarization; review the installation steps below
 before downloading.
@@ -18,8 +18,12 @@ architecture, and open-source friendliness.
 
 ## What Ayah is
 
-- A menu-bar-style app whose primary surface is the MacBook's notch area
-  (with a standard menu-bar popover fallback on Macs without a notch)
+- A menu-bar-style app whose primary surface is the MacBook's notch area.
+  On a Mac without a notch, the same verse and prayer-alert card appears as
+  a floating bar just below the menu bar instead — the features are the
+  same, only the shape and placement differ
+- A menu-bar popover for settings, present on every Mac whether or not it
+  has a notch
 - Periodic, unobtrusive display of Quran verses, with configurable
   frequency and how many consecutive verses appear at once (default 2)
 - A persistent **Last Shown** card in the menu-bar popover, with replay for
@@ -86,6 +90,8 @@ source acknowledgements are bundled inside the app and can be opened from
   of the Quran text/font licensing situation
 - **`CONTRIBUTING.md`** — ground rules, especially around the Quran data
   pipeline
+- **`docs/history/BUILD_LOG.md`** — a frozen record of how each piece was
+  built, kept for the "why was it done this way" question; not maintained
 - **`docs/release/`** — the stable-release checklist, bilingual
   installation instructions, and published GitHub release notes
 

@@ -23,8 +23,6 @@ final class NotchController {
     private var isFallbackMode = false
     private var fallbackVisibilityCancellable: AnyCancellable?
 
-    private static let expandedSize = CGSize(width: 480, height: 220)
-
     init(
         quranRepository: QuranRepository?,
         verseScheduler: VerseScheduler?,
@@ -140,7 +138,7 @@ final class NotchController {
 
         viewModel.collapsedSize = CGSize(width: notchFrame.width, height: notchFrame.height)
 
-        let size = Self.expandedSize
+        let size = NotchMetrics.expandedSize
         let origin = NSPoint(
             x: notchFrame.midX - size.width / 2,
             y: screen.frame.maxY - size.height
@@ -153,7 +151,7 @@ final class NotchController {
     /// strip, so the bar sits flush underneath it instead of overlapping
     /// menu-bar items — there's no notch cutout here to anchor to instead.
     private func repositionFallback(panel: NotchPanel, on screen: NSScreen) {
-        let size = Self.expandedSize
+        let size = NotchMetrics.expandedSize
         let origin = NSPoint(
             x: screen.frame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height
