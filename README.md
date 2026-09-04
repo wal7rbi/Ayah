@@ -1,136 +1,132 @@
-# Ayah
+# آية
 
-A lightweight, privacy-first, fully offline native macOS app that displays
-Quran verses from the MacBook notch area, helps memorize selected verses,
-and calculates Islamic prayer times entirely offline with in-notch prayer
-alerts while the app is running.
+تطبيق أصلي خفيف لنظام macOS، يضع آيات من القرآن الكريم في طرف الشاشة
+"notch" في جهاز MacBook، ويساعد على حفظ الآيات المختارة، ويحسب أوقات الصلاة
+محليًا بالكامل، مع تنبيهات تظهر في طرف الشاشة "notch" أثناء تشغيل التطبيق.
 
-**Status: 1.0.2, published.** Ayah is available as an open-source,
-unnotarized macOS app. The release policy does not use an Apple Developer
-account, Developer ID, or notarization; review the installation steps below
-before downloading.
+**الحالة: الإصدار 1.0.2 منشور.** يتوفر آية كتطبيق مفتوح المصدر وغير موثّق
+لدى Apple. لا يستخدم المشروع حساب Apple Developer أو شهادة Developer ID أو
+خدمة توثيق Apple؛ لذلك يُرجى مراجعة خطوات التثبيت أدناه قبل تنزيل التطبيق.
 
-## Priorities
+## الأولويات
 
-In order: correctness of Quran data, privacy and security, very low
-CPU/memory/battery usage, a native macOS experience, a simple maintainable
-architecture, and open-source friendliness.
+بالترتيب: صحة بيانات القرآن الكريم، والخصوصية والأمان، والاستهلاك المنخفض جدًا
+للمعالج والذاكرة والبطارية، وتجربة macOS أصلية، وبنية بسيطة سهلة الصيانة،
+ودعم المساهمة مفتوحة المصدر.
 
-## What Ayah is
+## ما هو آية؟
 
-- A menu-bar-style app whose primary surface is the MacBook's notch area.
-  On a Mac without a notch, the same verse and prayer-alert card appears as
-  a floating bar just below the menu bar instead — the features are the
-  same, only the shape and placement differ
-- A menu-bar popover for settings, present on every Mac whether or not it
-  has a notch
-- Periodic, unobtrusive display of Quran verses, with configurable
-  frequency and how many consecutive verses appear at once (default 2)
-- A persistent **Last Shown** card in the menu-bar popover, with replay for
-  the most recent verse or prayer alert
-- Selectable memorization sets (single ayah, ayah ranges, or full surahs)
-  that appear more frequently than general verses, at a configurable ratio
-- Fully offline Islamic prayer time calculation (Umm al-Qura by default,
-  other configured methods available) with optional in-notch alerts
-- Arabic/RTL Quran rendering with the bundled KFGQPC Uthmanic Hafs font
-- An in-app **حول التطبيق** window crediting the KFGQPC Quran text/font,
-  Adhan Swift, and GeoNames without implying affiliation or endorsement
+- تطبيق يعمل من شريط القوائم، وتظهر واجهته الأساسية في طرف الشاشة "notch"
+  في جهاز MacBook
+- **ليس لديك جهاز بطرف الشاشة "notch"؟** يعمل آية بشكل طبيعي وبكامل مزاياه؛
+  وتظهر
+  بطاقة الآية وتنبيه الصلاة كشريط عائم أسفل شريط القوائم بدلًا من ذلك. يختلف
+  الشكل والموضع فقط
+- نافذة إعدادات من شريط القوائم متاحة على جميع أجهزة Mac
+- عرض دوري وغير مزعج لآيات القرآن، مع إمكانية تحديد مدة التكرار وعدد الآيات
+  المتتالية المعروضة في كل مرة (العدد الافتراضي آيتان)
+- بطاقة **آخر ما ظهر** للاحتفاظ بآخر آية أو تنبيه صلاة وإعادة عرضه
+- مجموعات حفظ قابلة للتخصيص، من آية واحدة أو نطاق آيات أو سورة كاملة، تظهر
+  بنسبة أعلى من بقية الآيات وفق إعداد يختاره المستخدم
+- حساب أوقات الصلاة محليًا بالكامل، باستخدام طريقة أم القرى افتراضيًا، مع
+  توفر طرق حساب أخرى وتنبيهات اختيارية في طرف الشاشة "notch"
+- عرض عربي من اليمين إلى اليسار باستخدام خط مصحف المدينة المضمّن
+- نافذة **حول التطبيق** تعرض مصادر نص القرآن وخطه ومكتبة Adhan Swift وبيانات
+  GeoNames، من دون الإيحاء بأي ارتباط أو اعتماد رسمي
 
-## What Ayah deliberately is not
+## ما الذي لا يفعله آية؟
 
-- No backend, no user accounts, no cloud sync, no login
-- No analytics, telemetry, or crash reporting of any kind
-- No advertisements or tracking
-- No network calls during normal use — enforced at the OS level by
-  omitting the App Sandbox network entitlement, not just promised in
-  policy (see `PRIVACY.md`)
-- No Electron, Chromium, or WebView — native Swift/SwiftUI/AppKit only
+- لا توجد خوادم خلفية أو حسابات مستخدمين أو مزامنة سحابية أو تسجيل دخول
+- لا توجد تحليلات استخدام أو بيانات قياس أو تقارير أعطال
+- لا توجد إعلانات أو أدوات تتبع
+- لا يجري التطبيق اتصالات شبكية أثناء الاستخدام العادي؛ ويفرض ذلك نظام
+  التشغيل بعدم منح التطبيق صلاحية الشبكة ضمن App Sandbox، وليس مجرد وعد في
+  سياسة الخصوصية (راجع [`PRIVACY.md`](PRIVACY.md))
+- لا يستخدم Electron أو Chromium أو WebView؛ التطبيق مبني باستخدام Swift
+  وSwiftUI وAppKit
 
-## Requirements
+## المتطلبات
 
-Apple Silicon Mac with macOS 13 (Ventura) or later. Version 1.0.2 does not
-include an Intel `x86_64` binary.
+جهاز Mac بمعالج Apple Silicon ونظام macOS 13 Ventura أو أحدث. لا يتضمن
+الإصدار 1.0.2 نسخة لمعالجات Intel من معمارية `x86_64`.
 
-## Installing the unnotarized release
+## تثبيت التطبيق
 
-Ayah 1.0.2 is distributed directly as
-`Ayah-1.0.2-macOS-arm64.dmg`. It is ad-hoc signed to preserve bundle
-integrity, but it has no Apple Developer ID signature and is not notarized.
-macOS will therefore block its first launch as an unidentified-developer
-app. After attempting to open Ayah, use **System Settings > Privacy &
-Security > Open Anyway** for this app. Do not disable Gatekeeper globally.
+يُوزّع آية 1.0.2 مباشرة في الملف `Ayah-1.0.2-macOS-arm64.dmg`. التطبيق
+موقّع بتوقيع `ad-hoc` لحماية سلامة الحزمة، لكنه لا يحمل شهادة Developer ID
+ولم يخضع لخدمة توثيق Apple. لذلك سيمنع macOS تشغيله أول مرة باعتباره تطبيقًا
+من مطور غير معروف.
 
-[![Download Ayah for macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.2-macOS-arm64.dmg)
+بعد محاولة فتح آية، انتقل إلى:
 
-The button downloads the current DMG from Ayah's public GitHub Release.
+**إعدادات النظام > الخصوصية والأمن > فتح على أي حال**
 
-Download the accompanying `.sha256` file and verify the DMG before opening:
+لا تعطّل Gatekeeper بالكامل.
+
+[![تنزيل آية لنظام macOS](docs/assets/download-macos.svg)](https://github.com/wal7rbi/Ayah/releases/latest/download/Ayah-1.0.2-macOS-arm64.dmg)
+
+ينزّل الزر ملف DMG الحالي من إصدار آية المنشور على GitHub.
+
+نزّل ملف `.sha256` المرافق وتحقق من سلامة ملف DMG قبل فتحه:
 
 ```sh
 shasum -a 256 -c Ayah-1.0.2-macOS-arm64.dmg.sha256
 ```
 
-Complete Arabic and English installation instructions remain available in
-[`docs/release/INSTALL.txt`](docs/release/INSTALL.txt). The mounted DMG keeps
-the standard uncluttered layout: drag **Ayah** to **Applications**. License and
-source acknowledgements are bundled inside the app and can be opened from
-**حول التطبيق**.
+تتوفر تعليمات التثبيت الكاملة بالعربية والإنجليزية في
+[`docs/release/INSTALL.txt`](docs/release/INSTALL.txt). بعد فتح ملف DMG، اسحب
+**آية** إلى مجلد **Applications**. تراخيص ومصادر المكونات مضمنة داخل التطبيق
+ويمكن فتحها من نافذة **حول التطبيق**.
 
-## Building from source
+## البناء من المصدر
 
-Ayah has no external build dependencies beyond Xcode and
-[XcodeGen](https://github.com/yonaskolb/XcodeGen). `Ayah.xcodeproj` is
-generated from `project.yml`, so regenerate it after pulling and after adding
-any new source file:
+لا يحتاج آية إلى أدوات بناء خارجية سوى Xcode و
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). يُولّد ملف
+`Ayah.xcodeproj` من `project.yml`، لذلك أعد توليده بعد جلب التغييرات أو إضافة
+أي ملف مصدر جديد:
 
 ```sh
 xcodegen generate
 xcodebuild -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' build
 ```
 
-There are two test suites, and they run differently — the first is fast and
-headless, the second is app-hosted:
+يحتوي المشروع على مجموعتي اختبارات؛ الأولى سريعة وتعمل دون واجهة، والثانية
+تعمل داخل التطبيق:
 
 ```sh
 cd Packages/AyahKit && swift test
 xcodebuild test -project Ayah.xcodeproj -scheme Ayah -destination 'platform=macOS' -configuration Debug
 ```
 
-A **Release** build additionally runs `Scripts/verify_quran` and the full
-AyahKit suite as a pre-build gate, so shipping a Release binary against
-unverified Quran data is not possible. Debug builds skip it.
+يشغّل بناء **Release** أداة `Scripts/verify_quran` وجميع اختبارات AyahKit
+تلقائيًا قبل البناء، لمنع إنشاء نسخة إصدار باستخدام بيانات قرآن لم تُتحقق
+سلامتها. لا يشغّل بناء Debug هذه البوابة.
 
-Ayah is an `LSUIElement` app with no Dock icon; quit it from the menu-bar
-popover's **إغلاق آية** button rather than Cmd-Q. `CONTRIBUTING.md` has the
-ground rules, and `CLAUDE.md` documents the non-obvious build and runtime
-pitfalls this project has already paid for.
+يعمل آية كتطبيق `LSUIElement` ولا يظهر في شريط Dock. لإغلاقه، استخدم زر
+**إغلاق آية** من نافذة شريط القوائم بدلًا من Cmd-Q. راجع
+[`CONTRIBUTING.md`](CONTRIBUTING.md) للاطلاع على إرشادات المساهمة.
 
-## Documentation
+## الوثائق
 
-- **`ARCHITECTURE.md`** — full technical design: notch UI approach, data
-  model, module boundaries, prayer-calculation details, scheduling
-  strategy, and the rationale behind each decision
-- **`PRIVACY.md`** — exactly what's stored locally and how offline
-  operation is architecturally enforced
-- **`SECURITY.md`** — sandbox/entitlement posture and how to report a
-  vulnerability
-- **`THIRD_PARTY_LICENSES.md`** — every third-party dependency and
-  bundled data resource, including a transparent, non-buried explanation
-  of the Quran text/font licensing situation
-- **`CONTRIBUTING.md`** — ground rules, especially around the Quran data
-  pipeline
-- **`docs/history/BUILD_LOG.md`** — a frozen record of how each piece was
-  built, kept for the "why was it done this way" question; not maintained
-- **`docs/release/`** — per-version release notes, the stable-release
-  checklist, the QA approval record with the exact scope of what was and
-  was not verified, and bilingual installation instructions. Published
-  builds live on the
-  [Releases page](https://github.com/wal7rbi/Ayah/releases)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — البنية التقنية، وأسلوب عرض الواجهة
+  في طرف الشاشة "notch"، ونموذج البيانات، وحدود الوحدات، وحساب أوقات الصلاة،
+  وجدولة العرض، وأسباب القرارات التقنية
+- [`PRIVACY.md`](PRIVACY.md) — البيانات المحفوظة محليًا وكيفية فرض التشغيل
+  دون اتصال على مستوى البنية
+- [`SECURITY.md`](SECURITY.md) — بنية App Sandbox والصلاحيات وطريقة الإبلاغ
+  عن الثغرات
+- [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) — تراخيص ومصادر جميع
+  المكونات والبيانات الخارجية، بما فيها تفاصيل ترخيص نص القرآن وخطه
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — إرشادات المساهمة، ولا سيما ما يتعلق
+  بمسار بيانات القرآن
+- [`docs/release/`](docs/release/) — تعليمات التثبيت وملاحظات الإصدارات
 
-## License
+تتوفر النسخ المنشورة في صفحة
+[الإصدارات](https://github.com/wal7rbi/Ayah/releases).
 
-Ayah's source code is MIT-licensed — see `LICENSE`. The bundled Quran
-text, Quran font, and location data have their own licensing terms (one
-of them with a documented, deliberately accepted risk rather than a clean
-license) — see `THIRD_PARTY_LICENSES.md` before assuming anything in this
-repository is uniformly licensed.
+## الترخيص
+
+الشيفرة المصدرية لتطبيق آية مرخّصة برخصة MIT؛ راجع [`LICENSE`](LICENSE).
+تخضع بيانات القرآن الكريم وخطه وبيانات المواقع الجغرافية لشروط وترخيصات مستقلة
+موضحة في [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)، لذلك لا تفترض
+أن جميع محتويات المستودع تخضع لترخيص واحد.
