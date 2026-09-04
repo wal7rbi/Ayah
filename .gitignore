@@ -15,3 +15,12 @@ dist/
 
 # Claude Code local session state
 .claude/
+
+# Internal project documentation
+/CLAUDE.md
+/docs/history/
+/docs/audits/
+/docs/plans/
+/docs/performance/*-baseline-*.md
+/docs/release/QA_APPROVAL_*.md
+/docs/release/RELEASE_CHECKLIST_*.md
