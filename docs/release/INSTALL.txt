@@ -1,7 +1,7 @@
-تثبيت آية 1.0.2 — Apple Silicon / macOS 13 أو أحدث
+تثبيت آية 1.0.3 — Apple Silicon / macOS 13 أو أحدث
 =====================================================
 
-1. افتح ملف Ayah-1.0.2-macOS-arm64.dmg.
+1. افتح ملف Ayah-1.0.3-macOS-arm64.dmg.
 2. اسحب Ayah.app إلى مجلد Applications.
 3. حاول فتح آية من مجلد التطبيقات. سيمنع macOS التشغيل الأول لأن التطبيق
    غير موثق بحساب مطور Apple.
@@ -13,16 +13,16 @@
 
 للتحقق من الملف قبل فتحه، ضع ملف DMG وملف .sha256 في المجلد نفسه ثم نفّذ:
 
-  shasum -a 256 -c Ayah-1.0.2-macOS-arm64.dmg.sha256
+  shasum -a 256 -c Ayah-1.0.3-macOS-arm64.dmg.sha256
 
 آية موقّع محليًا بتوقيع ad-hoc للمحافظة على سلامة الحزمة، لكنه غير موقّع
 بهوية Apple Developer ID وغير موثق لدى Apple.
 
 
-Install Ayah 1.0.2 — Apple Silicon / macOS 13 or later
+Install Ayah 1.0.3 — Apple Silicon / macOS 13 or later
 ======================================================
 
-1. Open Ayah-1.0.2-macOS-arm64.dmg.
+1. Open Ayah-1.0.3-macOS-arm64.dmg.
 2. Drag Ayah.app to Applications.
 3. Try to open Ayah from Applications. macOS will block the first launch
    because the app is not registered with an identified Apple developer.
@@ -34,7 +34,7 @@ commands. Use only macOS's per-app Open Anyway exception.
 
 To verify the download, place the DMG and .sha256 file together and run:
 
-  shasum -a 256 -c Ayah-1.0.2-macOS-arm64.dmg.sha256
+  shasum -a 256 -c Ayah-1.0.3-macOS-arm64.dmg.sha256
 
 Ayah is ad-hoc signed to preserve bundle integrity, but it has no Apple
 Developer ID signature and is not notarized by Apple.

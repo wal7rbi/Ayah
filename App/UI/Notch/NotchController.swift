@@ -22,6 +22,7 @@ final class NotchController {
     private let prayerAlertScheduler: PrayerAlertScheduler?
     private var isFallbackMode = false
     private var fallbackVisibilityCancellable: AnyCancellable?
+    private var fallbackHideTask: Task<Void, Never>?
 
     init(
         quranRepository: QuranRepository?,
@@ -80,16 +81,41 @@ final class NotchController {
         viewModel.startPrayerAlerts()
 
         fallbackVisibilityCancellable = viewModel.$isExpanded
-            .sink { [weak panel] isExpanded in
-                guard let panel else { return }
-                if isExpanded {
-                    panel.orderFrontRegardless()
-                } else {
-                    panel.orderOut(nil)
-                }
+            .sink { [weak self] isExpanded in
+                self?.setFallbackBarVisible(isExpanded)
             }
 
         registerObservers()
+    }
+
+    /// `@Published` publishes from `willSet`, so this runs one render pass
+    /// before SwiftUI has drawn the new state. Showing early is harmless —
+    /// the card's own transition plays with the panel already up. Hiding
+    /// early is not: ordering the panel out before the collapse animation
+    /// runs makes the bar vanish rather than close. So the hide waits the
+    /// animation out first, and re-checks `isExpanded` in case the bar was
+    /// re-expanded in the meantime.
+    private func setFallbackBarVisible(_ isVisible: Bool) {
+        fallbackHideTask?.cancel()
+        fallbackHideTask = nil
+        guard let panel else { return }
+        guard !isVisible else {
+            panel.orderFrontRegardless()
+            return
+        }
+        // Nothing to animate away: the sink's first emission at subscribe
+        // time, when the panel was never ordered in; or Reduce Motion, where
+        // there is no animation in the first place.
+        guard panel.isVisible, let duration = NotchViewModel.collapseAnimationDuration else {
+            panel.orderOut(nil)
+            return
+        }
+        fallbackHideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled, let self, !self.viewModel.isExpanded else { return }
+            self.fallbackHideTask = nil
+            self.panel?.orderOut(nil)
+        }
     }
 
     private func registerObservers() {
@@ -152,6 +178,13 @@ final class NotchController {
     /// menu-bar items — there's no notch cutout here to anchor to instead.
     private func repositionFallback(panel: NotchPanel, on screen: NSScreen) {
         let size = NotchMetrics.expandedSize
+        // No cutout here to grow out of, and no real notch geometry to
+        // derive a collapsed size from the way `reposition(panel:on:)` does.
+        // Matching the expanded size keeps the shape from resizing at all,
+        // so the panel can't be ordered on screen still drawing the
+        // default 200x32 collapsed stub for a frame before it grows; the
+        // card's scale/opacity transition is the whole animation instead.
+        viewModel.collapsedSize = size
         let origin = NSPoint(
             x: screen.frame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height

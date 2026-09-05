@@ -155,23 +155,46 @@ final class NotchViewModelTests: XCTestCase {
         XCTAssertTrue(collapsed, "The auto-collapse task should have collapsed the notch.")
     }
 
-    func testManualToggleCancelsThePendingAutoCollapse() async throws {
-        let autoCollapseDelay = Duration.milliseconds(60)
+    func testTappingToExpandArmsTheAutoCollapse() async throws {
+        let viewModel = try makeViewModel(
+            lastShownStore: try prayerAlertStore(),
+            autoCollapseDelay: .milliseconds(60)
+        )
+        XCTAssertFalse(viewModel.isExpanded)
+
+        // The notch's own tap handler. On a physical notch it is the only
+        // "show it again" affordance, and it used to expand the card with no
+        // dismissal timer at all, leaving it on screen indefinitely.
+        viewModel.toggleExpanded()
+        XCTAssertTrue(viewModel.isExpanded)
+
+        let collapsed = await waitUntil { !viewModel.isExpanded }
+        XCTAssertTrue(collapsed, "A tap that expands must arm the auto-collapse, not leave the card open forever.")
+    }
+
+    func testReexpandingArmsAFreshDelayRatherThanInheritingTheStaleOne() async throws {
+        let autoCollapseDelay = Duration.milliseconds(600)
         let viewModel = try makeViewModel(
             lastShownStore: try prayerAlertStore(),
             autoCollapseDelay: autoCollapseDelay
         )
         viewModel.replayLastShown()
 
+        // Two thirds of the way to the deadline the display armed, so what is
+        // left of it is plainly shorter than a whole fresh delay.
+        try await Task.sleep(for: autoCollapseDelay * 2 / 3)
         viewModel.toggleExpanded()
         XCTAssertFalse(viewModel.isExpanded)
         viewModel.toggleExpanded()
         XCTAssertTrue(viewModel.isExpanded)
 
-        // Well past the deadline the display armed, so an uncancelled task
-        // would have collapsed the notch out from under the reader by now.
-        try await Task.sleep(for: autoCollapseDelay * 8)
-        XCTAssertTrue(viewModel.isExpanded, "A manual tap must cancel the pending auto-collapse, not race it.")
+        // Past where the display's original deadline would have landed: the
+        // reader who just tapped the card open must still be looking at it.
+        try await Task.sleep(for: autoCollapseDelay * 2 / 3)
+        XCTAssertTrue(viewModel.isExpanded, "Re-expanding must arm a fresh delay, not inherit the pending one.")
+
+        let collapsed = await waitUntil { !viewModel.isExpanded }
+        XCTAssertTrue(collapsed, "…and that fresh delay must still collapse the notch on its own.")
     }
 
     // MARK: - The isVerseDisplayEnabled sink
