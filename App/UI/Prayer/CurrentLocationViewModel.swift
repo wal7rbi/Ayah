@@ -28,10 +28,12 @@ final class CurrentLocationViewModel: ObservableObject {
         defer { isFetching = false }
         do {
             let coordinates = try await provider.requestOneShotLocation()
-            settingsStore.settings.currentLocationCoordinates = coordinates
-            settingsStore.settings.currentLocationTimeZoneIdentifier = TimeZone.current.identifier
-            settingsStore.settings.currentLocationFetchedAt = Date()
-            settingsStore.settings.prayerLocationSource = .currentLocation
+            var settings = settingsStore.settings
+            settings.currentLocationCoordinates = coordinates
+            settings.currentLocationTimeZoneIdentifier = TimeZone.current.identifier
+            settings.currentLocationFetchedAt = Date()
+            settings.prayerLocationSource = .currentLocation
+            settingsStore.settings = settings
         } catch LocationProviderError.authorizationDenied {
             errorMessage = "لم يتم منح إذن الموقع لآية. يمكنك تفعيله من إعدادات النظام > الخصوصية والأمان > خدمات الموقع."
         } catch {

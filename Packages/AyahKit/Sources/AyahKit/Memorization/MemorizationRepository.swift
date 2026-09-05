@@ -148,6 +148,56 @@ public final class MemorizationRepository {
         }
     }
 
+    /// Changes only the enabled flag, so a retained UI snapshot cannot roll
+    /// back progress that the scheduler has advanced since the list loaded.
+    public func setEnabled(id: String, isEnabled: Bool) throws {
+        let rows = try connection.query(
+            "UPDATE memorization_sets SET is_enabled = ? WHERE id = ? RETURNING id;",
+            bind: { stmt in
+                sqlite3_bind_int(stmt, 1, isEnabled ? 1 : 0)
+                sqlite3_bind_text(stmt, 2, id, -1, Self.transient)
+            },
+            map: { _ in true }
+        )
+        guard !rows.isEmpty else { throw MemorizationRepositoryError.notFound }
+    }
+
+    /// Saves editor-owned fields in one statement, preserving the current
+    /// database cursor and review metadata rather than a stale UI snapshot.
+    /// A new surah or a range that excludes the cursor starts a fresh walk.
+    public func updateDetails(
+        id: String,
+        surahNumber: Int,
+        startAyah: Int,
+        endAyah: Int,
+        repetitionMode: MemorizationSet.RepetitionMode,
+        isEnabled: Bool
+    ) throws {
+        try Self.validate(surahNumber: surahNumber, startAyah: startAyah, endAyah: endAyah)
+        let rows = try connection.query(
+            """
+            UPDATE memorization_sets SET
+              cursor_ayah = CASE
+                WHEN surah_number != ?1 OR cursor_ayah NOT BETWEEN ?2 AND ?3 THEN NULL
+                ELSE cursor_ayah
+              END,
+              surah_number = ?1, start_ayah = ?2, end_ayah = ?3,
+              repetition_mode = ?4, is_enabled = ?5
+            WHERE id = ?6 RETURNING id;
+            """,
+            bind: { stmt in
+                sqlite3_bind_int(stmt, 1, Int32(surahNumber))
+                sqlite3_bind_int(stmt, 2, Int32(startAyah))
+                sqlite3_bind_int(stmt, 3, Int32(endAyah))
+                sqlite3_bind_text(stmt, 4, repetitionMode.rawValue, -1, Self.transient)
+                sqlite3_bind_int(stmt, 5, isEnabled ? 1 : 0)
+                sqlite3_bind_text(stmt, 6, id, -1, Self.transient)
+            },
+            map: { _ in true }
+        )
+        guard !rows.isEmpty else { throw MemorizationRepositoryError.notFound }
+    }
+
     public func update(_ set: MemorizationSet) throws {
         try Self.validate(surahNumber: set.surahNumber, startAyah: set.startAyah, endAyah: set.endAyah)
         if let cursorAyah = set.cursorAyah {

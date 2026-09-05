@@ -95,22 +95,22 @@ menu bar, with `collectionBehavior` including `.canJoinAllSpaces` and
 `.fullScreenAuxiliary` so it stays visible across Spaces and full-screen
 apps.
 
-Expand/collapse is driven **purely by SwiftUI state** (`withAnimation` /
-spring animations) triggered only on discrete events — a verse becoming
-due, or a user click. There is never a continuous per-frame animation
+Expand/collapse is driven by discrete state changes — a verse becoming
+due, or a user click. Physical-notch geometry uses SwiftUI spring animations;
+the floating card uses a bounded AppKit window-frame animation. There is never a continuous per-frame animation
 loop. This is the single biggest lever on the idle-CPU target: web-shell
 based notch apps have been observed sitting at 10–15% CPU continuously,
 purely from render loops, versus roughly 0.1–1% for a SwiftUI
 state-driven approach.
 
-Three existing open-source notch projects were studied for proven
-technique (none of their code is copied — see `THIRD_PARTY_LICENSES.md`):
-
-| Project | License | Notes |
-|---|---|---|
-| [NotchDrop](https://github.com/Lakr233/NotchDrop) | MIT | Borderless NSPanel over the notch rect; safe to reference |
-| [boring.notch](https://github.com/TheBoredTeam/boring.notch) | GPL-3.0 | Copyleft — studied for the general windowing approach only, **never to be copied from** |
-| NotchNook | Closed source | Nothing to reference |
+The concave notch shape is adapted from DynamicNotchKit's verified MIT
+source, with its copyright and license bundled. The shape was originally
+encountered in boring.notch, which also credits DynamicNotchKit; this
+corrects the earlier claim that no notch UI source was reused. The floating
+fallback presentation also adapts DynamicNotchKit's rounded-card and slide
+animation approach. No DynamicNotchKit package dependency is added.
+See `THIRD_PARTY_LICENSES.md` for the pinned source revision and provenance.
+NotchDrop and boring.notch were also studied for windowing techniques.
 
 ## 4. Fallback for Macs without a notch
 
@@ -125,38 +125,24 @@ MacBook driving only an external display): it is also the **default entry
 point for Settings** on every Mac, notch or not, so there's only one
 interaction pattern to maintain rather than two divergent UIs.
 
-**Verse display and prayer alerts** get their own fallback, reusing the
-same view stack as the physical notch rather than going unimplemented or
-duplicating it. `NotchController.attachToNotchIfAvailable()` picks one of
-two paths once, at attach time: `attachPhysicalNotch(on:)` (a panel sized
-to the real notch cutout, always visible as a small collapsed pill) or
-`attachFallbackBar()` when
-`notchedScreen()` finds no notch. The fallback reuses the exact same
-`NotchPanel`/`NotchViewModel`/`NotchContentView` — same Uthmanic-font verse
-card, same prayer-alert card, same expand/auto-collapse timing — as a
-borderless floating panel pinned to the top-center of the primary screen,
-positioned via `screen.visibleFrame.maxY` (which excludes the menu bar
-strip) so it sits flush below the menu bar rather than overlapping it.
-Two differences from the physical-notch path, both driven by a
-`NotchContentView.isPhysicalNotch` flag threaded down from `NotchPanel`:
-- **Shape**: a plain flat-topped, rounded-bottom `UnevenRoundedRectangle`
-  instead of `NotchShape`'s concave top flare — there's no physical camera
-  housing here for a concave flare to read as growing out of.
-- **Visibility**: hidden entirely while idle (`NotchController` subscribes
-  to `viewModel.$isExpanded` and orders the panel front/out accordingly)
-  rather than left as an always-visible collapsed pill — there's nothing
-  for a permanent floating pill to visually blend into on this class of
-  Mac the way the physical notch pill blends into the camera housing.
+**Verse display and prayer alerts** share `NotchPanel`, `NotchViewModel`,
+and the same verse/prayer card content. The controller selects a physical
+notch when available and otherwise uses the primary screen's floating
+fallback. It reevaluates this choice when display parameters change,
+including clamshell and external-display transitions, while preserving
+active content and the running schedulers.
 
-Both `VerseScheduler.start(...)` and `PrayerAlertScheduler.start(...)` are
-called from both paths identically. That matters: this is the only place
-either scheduler is started, so a path that skipped them would leave verse
-display and prayer alerts silently not running at all on that class of Mac.
-Switching modes while already running (e.g. a notched
-MacBook entering clamshell mode with only an external display attached) is
-out of scope — the same scope boundary the physical-notch path's own
-`screenParametersChanged()` already had (it only re-positions/hides within
-whichever mode was picked at attach time, not switches between them).
+On a physical notch, the black panel expands from the cutout and retains
+its collapsed silhouette. On a non-notch display, it is a solid-black
+floating card, rounded on all four corners, centered below the menu bar
+with a 20-point gap. The complete card and text slide down on opening and
+up on dismissal, using a 0.4-second window animation with a slight opening
+overshoot, following DynamicNotchKit's non-notch presentation. Reduce Motion
+shows and hides the card immediately. The fallback panel stays visible until dismissal animation
+finishes and is then hidden entirely; it does not leave an idle pill or
+an invisible click-blocking region. A newer popup cancels an older pending
+dismissal. Both modes retain verse replay and automatic dismissal without
+stealing keyboard focus.
 
 ## 5. Quran text source & licensing
 

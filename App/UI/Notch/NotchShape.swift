@@ -1,15 +1,11 @@
 import SwiftUI
 
-/// A rounded rectangle whose top corners curve inward (concave) rather than
-/// outward, so the panel reads as flaring organically out of the real notch
-/// cutout instead of sitting below it as a plain rounded rectangle. Ported
-/// from TheBoredTeam/boring.notch's shipped, screenshot-verified shape.
-///
-/// A previous attempt at this same concave silhouette used a cubic Bézier
-/// with overshooting control points and rendered the top corners sharp
-/// instead of curved (see CLAUDE.md's "Build order" notes on
-/// `NotchContentView`) — this quad-curve construction is a different,
-/// simpler algorithm and doesn't share that failure mode.
+/// Concave-top notch silhouette adapted from DynamicNotchKit by Kai Azim.
+/// Original: Sources/DynamicNotchKit/Views/NotchShape.swift at revision
+/// cd0b3e52d537db115ad3a9d89601f20e0bee8d27 (MIT, copyright 2025 Kai Azim).
+/// The same path implementation was encountered in TheBoredTeam/boring.notch,
+/// which credits DynamicNotchKit. Verified against the original MIT source;
+/// see Resources/ThirdParty/DynamicNotchKit-LICENSE.txt and THIRD_PARTY_LICENSES.md.
 struct NotchShape: Shape {
     private var topCornerRadius: CGFloat
     private var bottomCornerRadius: CGFloat

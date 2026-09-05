@@ -33,7 +33,9 @@ public final class PrayerAlertScheduler {
 
     private var settingsCancellable: AnyCancellable?
     private var systemChangeCancellables: Set<AnyCancellable> = []
-    private var timerSource: DispatchSourceTimer?
+    private var timerSource: (any OneShotTimerToken)?
+    private let timerScheduling: any OneShotTimerScheduling
+    private var currentSettings: AppSettings
     private var onAlertDue: ((PrayerAlertDisplay) -> Void)?
     private var scheduleGeneration: UInt = 0
     var rearmGeneration: UInt { scheduleGeneration }
@@ -43,13 +45,16 @@ public final class PrayerAlertScheduler {
         locationRepository: LocationRepository?,
         settingsStore: SettingsStore,
         notificationCenter: NotificationCenter = .default,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        timerScheduling: (any OneShotTimerScheduling)? = nil
     ) {
         self.quranRepository = quranRepository
         self.locationRepository = locationRepository
         self.settingsStore = settingsStore
         self.notificationCenter = notificationCenter
         self.now = now
+        self.timerScheduling = timerScheduling ?? DispatchOneShotTimer()
+        self.currentSettings = settingsStore.settings
     }
 
     public func start(onAlertDue: @escaping (PrayerAlertDisplay) -> Void) {
@@ -57,10 +62,15 @@ public final class PrayerAlertScheduler {
         self.onAlertDue = onAlertDue
         settingsCancellable = settingsStore.$settings
             .removeDuplicates()
-            .sink { [weak self] _ in self?.armNextTimer() }
+            .sink { [weak self] settings in
+                self?.currentSettings = settings
+                self?.armNextTimer()
+            }
         for name in [Notification.Name.NSSystemClockDidChange, .NSSystemTimeZoneDidChange] {
             notificationCenter.publisher(for: name)
-                .sink { [weak self] _ in self?.armNextTimer() }
+                .sink { [weak self] _ in
+                    Task { @MainActor in self?.rearm() }
+                }
                 .store(in: &systemChangeCancellables)
         }
     }
@@ -80,6 +90,7 @@ public final class PrayerAlertScheduler {
     /// doesn't otherwise cover: an already-armed timer's deadline passing
     /// while the Mac was asleep.
     public func rearm() {
+        currentSettings = settingsStore.settings
         armNextTimer()
     }
 
@@ -91,15 +102,15 @@ public final class PrayerAlertScheduler {
         timerSource?.cancel()
         timerSource = nil
 
-        guard settingsStore.settings.arePrayerNotificationsEnabled,
+        guard onAlertDue != nil, currentSettings.arePrayerNotificationsEnabled,
               let location = PrayerLocationResolver.resolve(
-                  settings: settingsStore.settings,
+                  settings: currentSettings,
                   locationRepository: locationRepository
               ) else { return }
         let coordinates = location.coordinates
         let timeZone = location.timeZone
 
-        let settings = settingsStore.settings
+        let settings = currentSettings
         let referenceNow = now()
         var tomorrowCalendar = Calendar.current
         tomorrowCalendar.timeZone = timeZone
@@ -128,16 +139,15 @@ public final class PrayerAlertScheduler {
 
         guard let next = events.first else { return }
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + max(1, next.fireDate.timeIntervalSince(referenceNow)), leeway: .seconds(5))
-        timer.setEventHandler { [weak self] in
+        timerSource = timerScheduling.schedule(
+            after: max(1, next.fireDate.timeIntervalSince(referenceNow)), leeway: 5
+        ) { [weak self] in
             guard let self, self.scheduleGeneration == generation else { return }
             let ayah = self.quranRepository?.randomAyah(searchableTextContains: Self.salahSearchSubstring)
             self.onAlertDue?(PrayerAlertDisplay(event: next, ayah: ayah))
+            guard self.scheduleGeneration == generation else { return }
             self.armNextTimer()
         }
-        timer.resume()
-        timerSource = timer
     }
 
     /// Pure and synchronous — the "what to show" half, fully testable
