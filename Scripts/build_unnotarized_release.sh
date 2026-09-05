@@ -69,7 +69,7 @@ for COMMAND in awk basename bash codesign cmp date ditto find git grep hdiutil l
 done
 
 EXPECTED_VERSION=1.0.3
-EXPECTED_BUILD=3
+EXPECTED_BUILD=4
 EXPECTED_TAG=v$EXPECTED_VERSION
 REVISION=$(git -C "$REPO_ROOT" rev-parse HEAD) || fail "could not resolve HEAD"
 WORKTREE_STATUS=$(git -C "$REPO_ROOT" status --porcelain)
