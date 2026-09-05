@@ -451,7 +451,7 @@
 /* Begin PBXTargetDependency section */
 		D8C4E1F5AC4FE139BD231202 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_20807D73-095A-4676-9A49-5DB6AE8D4D54" /* AyahKit */;
+			productRef = "TEMP_42D273BB-50A0-42AA-9150-EACE272F4CD2" /* AyahKit */;
 		};
 		DD4BAB965C363D5DC33E0CE6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -529,7 +529,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -538,7 +538,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.3;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
@@ -620,7 +620,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -629,7 +629,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
 				SDKROOT = macosx;
@@ -719,7 +719,7 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AyahKit;
 		};
-		"TEMP_20807D73-095A-4676-9A49-5DB6AE8D4D54" /* AyahKit */ = {
+		"TEMP_42D273BB-50A0-42AA-9150-EACE272F4CD2" /* AyahKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AyahKit;
 		};

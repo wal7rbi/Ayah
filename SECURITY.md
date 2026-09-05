@@ -21,10 +21,13 @@ were re-confirmed on 2026-09-01 against a freshly built app after the
 prayer-location, layout, test-target, and GeoNames-importer changes of that
 day; none of them altered the app's security posture.
 
-This review still describes the **published 1.0.2 build** (tag `v1.0.2`,
-revision `a35e112`): the only commit between the reviewed revision and the
-tag changed `README.md` and two files under `docs/release/`, and touched no
-source, resource, entitlement, or build-configuration file.
+This review was conducted against the **published 1.0.2 build** (tag
+`v1.0.2`, revision `a35e112`) and still describes **1.0.3**. Everything 1.0.3
+changes is confined to notch presentation — when the expanded card dismisses
+itself, and when the non-notch fallback panel is ordered off screen — in two
+files under `App/UI/Notch/` plus their test. It touches no entitlement,
+resource, network, or data-handling code; the only build-configuration change
+is the version number itself.
 
 - **App Sandbox**: on. `App/Ayah.entitlements` requests exactly two keys —
   `com.apple.security.app-sandbox` and
