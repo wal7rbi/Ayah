@@ -46,6 +46,16 @@ final class NotchViewModel: ObservableObject {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : expandSpring
     }
 
+    /// How long the collapse animation needs before the card is really gone.
+    /// `NotchController`'s fallback bar waits this out before ordering its
+    /// panel off screen; `nil` under Reduce Motion, where `motionAnimation`
+    /// is `nil` and there is nothing to wait for. Lives here so "is there an
+    /// animation" and "how long is it" stay one fact, next to `expandSpring`
+    /// whose response it covers.
+    static var collapseAnimationDuration: Duration? {
+        motionAnimation == nil ? nil : .milliseconds(450)
+    }
+
     init(
         quranRepository: QuranRepository?,
         verseScheduler: VerseScheduler?,
@@ -177,12 +187,22 @@ final class NotchViewModel: ObservableObject {
         }
     }
 
-    /// Routes manual taps through here (rather than the view mutating
-    /// `isExpanded` directly) so a click cancels any pending auto-collapse
-    /// instead of racing it.
+    /// Routes manual taps through here rather than letting the view mutate
+    /// `isExpanded` directly, because the two directions are not symmetric.
+    /// A tap that *expands* arms a whole fresh delay: it must not inherit
+    /// whatever is left of a pending one and get yanked shut mid-read, and
+    /// it must not arm nothing at all — on a physical notch the collapsed
+    /// pill is always on screen, so tapping it is the ordinary way to
+    /// re-read the last card, and leaving that with no timer stranded the
+    /// card on screen indefinitely. A tap that *collapses* cancels the
+    /// pending task outright, since there is nothing left to dismiss.
     func toggleExpanded() {
+        guard isExpanded else {
+            expandAndAutoCollapse()
+            return
+        }
         cancelAutoCollapse()
-        withAnimation(Self.motionAnimation) { isExpanded.toggle() }
+        withAnimation(Self.motionAnimation) { isExpanded = false }
     }
 
     private func cancelAutoCollapse() {
