@@ -260,6 +260,7 @@ if [ -d "$RELEASE_APP" ]; then
         GEONAMES_CHECKSUM \
         uthmanic_hafs_v20.ttf \
         Adhan-LICENSE.txt \
+        DynamicNotchKit-LICENSE.txt \
         GeoNames-NOTICE.txt \
         ACKNOWLEDGEMENTS.txt; do
         if [ ! -f "$RELEASE_APP/Contents/Resources/$RESOURCE" ]; then

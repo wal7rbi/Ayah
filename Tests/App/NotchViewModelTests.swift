@@ -6,7 +6,7 @@ import XCTest
 /// The first automated coverage of anything in `App/`. `NotchViewModel` is
 /// the piece that most deserves it: despite living next to the AppKit
 /// panel code it is really a state machine, and its three interacting
-/// pieces of state (`shouldSkipInitialScheduledVerses`, the cancellable
+/// pieces of state (`shouldDeferInitialVerseSelection`, the cancellable
 /// auto-collapse task, and the `isVerseDisplayEnabled` sink) all fail
 /// silently — a wrong answer shows up as a card that vanished, or one that
 /// never appeared, with nothing logged.
@@ -32,9 +32,9 @@ final class NotchViewModelTests: XCTestCase {
     nonisolated(unsafe) private var defaultsSuiteNames: [String] = []
     nonisolated(unsafe) private var startedSchedulers: [VerseScheduler] = []
 
-    override func tearDown() {
-        for scheduler in startedSchedulers {
-            scheduler.stop()
+    override func tearDown() async throws {
+        await MainActor.run {
+            for scheduler in startedSchedulers { scheduler.stop() }
         }
         startedSchedulers.removeAll()
         for name in defaultsSuiteNames {
@@ -45,7 +45,7 @@ final class NotchViewModelTests: XCTestCase {
             try? FileManager.default.removeItem(at: url)
         }
         temporaryDirectories.removeAll()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Launch restoration
@@ -66,40 +66,46 @@ final class NotchViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isExpanded, "Restoring at launch must not pop the notch open on its own.")
     }
 
-    // MARK: - The skipped first scheduler emission
+    // MARK: - Deferred launch selection
 
-    func testFirstScheduledEmissionIsIgnoredWhenARecordWasRestored() async throws {
+    func testRestoredRecordWaitsUntilFirstDeadline() async throws {
         let quranRepository = try quranRepository()
         let settingsStore = SettingsStore(defaults: try isolatedDefaults())
-        settingsStore.settings.displayInterval = 1
+        settingsStore.settings = AppSettings(displayInterval: 1, versesPerDisplay: 2, memorizationWeightPercent: 100)
+        let memorization = try MemorizationRepository(databasePath: ":memory:")
+        let set = try memorization.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        try memorization.updateCursor(id: set.id, cursorAyah: 3)
+        let scheduler = VerseScheduler(quranRepository: quranRepository, memorizationRepository: memorization,
+                                       settingsStore: settingsStore, randomDouble: { 0 })
+        startedSchedulers.append(scheduler)
         let lastShownStore = LastShownStore(defaults: try isolatedDefaults())
         let restoredShownAt = Date(timeIntervalSince1970: 1_000)
         lastShownStore.save(.verses(LastShownVerseRecord(ayahIDs: [1, 2], shownAt: restoredShownAt)))
 
         let viewModel = try makeViewModel(
             quranRepository: quranRepository,
-            verseScheduler: try verseScheduler(quranRepository: quranRepository, settingsStore: settingsStore),
+            verseScheduler: scheduler,
             settingsStore: settingsStore,
             lastShownStore: lastShownStore
         )
         viewModel.startDisplayTimer()
 
-        // `VerseScheduler.start` emits synchronously; the view model hops
-        // that back through `Task { @MainActor in }`, so let the hop run.
-        await drainMainActor()
+        // A restored card starts the scheduler without selecting a new batch.
         XCTAssertEqual(
             ayahIDs(of: viewModel.content), [1, 2],
             "The launch emission must not overwrite the restored card."
         )
         XCTAssertFalse(viewModel.isExpanded)
-        XCTAssertEqual(lastShownStore.record?.shownAt, restoredShownAt, "A skipped emission must not be recorded.")
+        XCTAssertEqual(memorization.fetchAll().first?.cursorAyah, 3, "Restoration must not consume unseen verses")
+        XCTAssertEqual(lastShownStore.record?.shownAt, restoredShownAt, "Deferring selection must not update the saved record.")
 
         // The next armed deadline (displayInterval, above) is a real
         // scheduled display and must go through.
         let displayed = await waitUntil { lastShownStore.record?.shownAt != restoredShownAt }
-        XCTAssertTrue(displayed, "The second scheduler emission should have been displayed.")
+        XCTAssertTrue(displayed, "The first scheduled deadline should display new content.")
         XCTAssertTrue(viewModel.isExpanded)
-        XCTAssertFalse(ayahIDs(of: viewModel.content).isEmpty)
+        XCTAssertEqual(ayahIDs(of: viewModel.content), [3, 4])
+        XCTAssertEqual(memorization.fetchAll().first?.cursorAyah, 5)
     }
 
     func testFirstScheduledEmissionIsDisplayedWhenNothingWasRestored() async throws {
@@ -338,9 +344,7 @@ final class NotchViewModelTests: XCTestCase {
 
     // MARK: - Waiting
 
-    /// Both schedulers hand their callbacks back through
-    /// `Task { @MainActor in … }`, so nothing they emit is visible in the
-    /// same turn. Polling from the main actor lets those hops run.
+    /// Poll only asynchronous timer and auto-collapse outcomes.
     @discardableResult
     private func waitUntil(
         timeout: Duration = .seconds(5),

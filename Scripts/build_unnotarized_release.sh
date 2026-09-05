@@ -16,8 +16,11 @@ Required:
   --output <directory>       Directory for the DMG, checksum, and report.
 
 Stable mode:
-  --manual-qa-approved       Assert the manual stable-release checklist passed.
-                             Requires a clean tree at annotated tag v1.0.3.
+  --publication-approved    Record the operator's authorization to publish.
+                             Requires a clean tree at annotated tag v1.0.4.
+                             Unverified manual checks remain MANUAL in the report.
+  --manual-qa-approved      Legacy alias for --publication-approved. It does
+                             not assert that unrecorded manual tests passed.
 
 Rehearsal mode:
   --allow-dirty-rehearsal   Permit a dirty tree and run shortened resource
@@ -44,7 +47,7 @@ while [ "$#" -gt 0 ]; do
             OUTPUT_DIR=$2
             shift 2
             ;;
-        --manual-qa-approved)
+        --publication-approved|--manual-qa-approved)
             MANUAL_QA_APPROVED=1
             shift
             ;;
@@ -68,14 +71,14 @@ for COMMAND in awk basename bash codesign cmp date ditto find git grep hdiutil l
     command -v "$COMMAND" >/dev/null 2>&1 || fail "required command not found: $COMMAND"
 done
 
-EXPECTED_VERSION=1.0.3
-EXPECTED_BUILD=4
+EXPECTED_VERSION=1.0.4
+EXPECTED_BUILD=5
 EXPECTED_TAG=v$EXPECTED_VERSION
 REVISION=$(git -C "$REPO_ROOT" rev-parse HEAD) || fail "could not resolve HEAD"
 WORKTREE_STATUS=$(git -C "$REPO_ROOT" status --porcelain)
 
 if [ "$REHEARSAL" -eq 0 ]; then
-    [ "$MANUAL_QA_APPROVED" -eq 1 ] || fail "stable packaging requires --manual-qa-approved"
+    [ "$MANUAL_QA_APPROVED" -eq 1 ] || fail "stable packaging requires --publication-approved"
     [ -z "$WORKTREE_STATUS" ] || fail "stable packaging requires a clean worktree"
     CURRENT_TAG=$(git -C "$REPO_ROOT" describe --tags --exact-match HEAD 2>/dev/null) \
         || fail "stable packaging requires HEAD to be tagged $EXPECTED_TAG"
@@ -200,6 +203,7 @@ for RESOURCE in \
     GEONAMES_CHECKSUM \
     uthmanic_hafs_v20.ttf \
     Adhan-LICENSE.txt \
+    DynamicNotchKit-LICENSE.txt \
     GeoNames-NOTICE.txt \
     ACKNOWLEDGEMENTS.txt; do
     [ -f "$APP_PATH/Contents/Resources/$RESOURCE" ] \
@@ -266,7 +270,7 @@ DMG_SHA256=$(awk '{ print $1 }' "$CHECKSUM_PATH")
     printf -- '- Entitlements: App Sandbox and Location only\n'
     printf -- '- DMG: `%s`\n' "$DMG_NAME"
     printf -- '- SHA-256: `%s`\n' "$DMG_SHA256"
-    printf -- '- Manual QA assertion: `%s`\n\n' "$(if [ "$MANUAL_QA_APPROVED" -eq 1 ]; then printf approved; else printf rehearsal-only; fi)"
+    printf -- '- Operator publication authorization: `%s`\n\n' "$(if [ "$MANUAL_QA_APPROVED" -eq 1 ]; then printf approved; else printf rehearsal-only; fi)"
     printf '## Automated release-candidate results\n\n'
     awk -F '\t' 'NR > 1 { printf "- %s: **%s**\n", $1, $2 }' "$CHECKS_DIR/results.tsv"
     printf '\nThis artifact is not signed by an identified Apple developer and is not notarized. Users must explicitly approve first launch through macOS Privacy & Security.\n'

@@ -55,6 +55,112 @@ final class MemorizationRepositoryTests: XCTestCase {
         XCTAssertEqual(refetched.cursorAyah, 3)
     }
 
+    func testEnabledTogglePreservesProgressAfterSnapshotBecomesStale() throws {
+        let (repository, _) = try makeRepository()
+        let snapshot = try repository.create(surahNumber: 2, startAyah: 1, endAyah: 20)
+        try repository.updateCursor(id: snapshot.id, cursorAyah: 15)
+
+        try repository.setEnabled(id: snapshot.id, isEnabled: false)
+        var persisted = try XCTUnwrap(repository.fetchAll().first)
+        XCTAssertFalse(persisted.isEnabled)
+        XCTAssertEqual(persisted.cursorAyah, 15)
+
+        try repository.setEnabled(id: snapshot.id, isEnabled: true)
+        persisted = try XCTUnwrap(repository.fetchAll().first)
+        XCTAssertTrue(persisted.isEnabled)
+        XCTAssertEqual(persisted.cursorAyah, 15)
+    }
+
+    func testEditorSavePreservesLiveProgressAndReviewMetadata() throws {
+        let (repository, _) = try makeRepository()
+        let snapshot = try repository.create(surahNumber: 2, startAyah: 1, endAyah: 20)
+        var latest = snapshot
+        latest.cursorAyah = 15
+        latest.lastShownAt = Date(timeIntervalSince1970: 1_700_000_000)
+        latest.easeFactor = 2.5
+        latest.reviewIntervalDays = 7
+        try repository.update(latest)
+
+        try repository.updateDetails(
+            id: snapshot.id, surahNumber: snapshot.surahNumber, startAyah: 10,
+            endAyah: 20, repetitionMode: .random, isEnabled: false
+        )
+
+        let persisted = try XCTUnwrap(repository.fetchAll().first)
+        XCTAssertEqual(persisted.cursorAyah, 15)
+        XCTAssertEqual(persisted.lastShownAt, latest.lastShownAt)
+        XCTAssertEqual(persisted.easeFactor, latest.easeFactor)
+        XCTAssertEqual(persisted.reviewIntervalDays, latest.reviewIntervalDays)
+        XCTAssertEqual(persisted.createdAt.timeIntervalSince1970, snapshot.createdAt.timeIntervalSince1970, accuracy: 0.001)
+        XCTAssertEqual(persisted.startAyah, 10)
+        XCTAssertEqual(persisted.repetitionMode, .random)
+        XCTAssertFalse(persisted.isEnabled)
+    }
+
+    func testEditorSaveResetsCursorWhenEditedRangeExcludesIt() throws {
+        let (repository, _) = try makeRepository()
+        for (start, end) in [(1, 10), (16, 20)] {
+            let set = try repository.create(surahNumber: 2, startAyah: 1, endAyah: 20)
+            try repository.updateCursor(id: set.id, cursorAyah: 15)
+            try repository.updateDetails(
+                id: set.id, surahNumber: 2, startAyah: start, endAyah: end,
+                repetitionMode: .sequential, isEnabled: true
+            )
+            let persisted = try XCTUnwrap(repository.fetchAll().first { $0.id == set.id })
+            XCTAssertNil(persisted.cursorAyah)
+            XCTAssertEqual(persisted.startAyah, start)
+            XCTAssertEqual(persisted.endAyah, end)
+        }
+    }
+
+    func testEditorSaveResetsCursorOnSurahChangeEvenIfStillInRange() throws {
+        let (repository, _) = try makeRepository()
+        for cursor in [3, 15] {
+            let set = try repository.create(surahNumber: 2, startAyah: 1, endAyah: 20)
+            try repository.updateCursor(id: set.id, cursorAyah: cursor)
+            try repository.updateDetails(
+                id: set.id, surahNumber: 1, startAyah: 1, endAyah: 7,
+                repetitionMode: .sequential, isEnabled: true
+            )
+            let persisted = try XCTUnwrap(repository.fetchAll().first { $0.id == set.id })
+            XCTAssertNil(persisted.cursorAyah)
+            XCTAssertEqual(persisted.surahNumber, 1)
+        }
+    }
+
+    func testEditorSaveRejectsInvalidRangeWithoutChangingProgress() throws {
+        let (repository, _) = try makeRepository()
+        let set = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        try repository.updateCursor(id: set.id, cursorAyah: 4)
+        XCTAssertThrowsError(try repository.updateDetails(
+            id: set.id, surahNumber: 1, startAyah: 1, endAyah: 8,
+            repetitionMode: .random, isEnabled: false
+        )) { error in
+            XCTAssertEqual(error as? MemorizationRepositoryError, .ayahOutsideSurah)
+        }
+        let persisted = try XCTUnwrap(repository.fetchAll().first)
+        XCTAssertEqual(persisted.cursorAyah, 4)
+        XCTAssertEqual(persisted.endAyah, 7)
+        XCTAssertEqual(persisted.repetitionMode, .sequential)
+        XCTAssertTrue(persisted.isEnabled)
+    }
+
+    func testNarrowUpdatesReportDeletedSetInsteadOfSucceedingSilently() throws {
+        let (repository, _) = try makeRepository()
+        let set = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        try repository.delete(id: set.id)
+        XCTAssertThrowsError(try repository.setEnabled(id: set.id, isEnabled: false)) { error in
+            XCTAssertEqual(error as? MemorizationRepositoryError, .notFound)
+        }
+        XCTAssertThrowsError(try repository.updateDetails(
+            id: set.id, surahNumber: 1, startAyah: 1, endAyah: 7,
+            repetitionMode: .sequential, isEnabled: true
+        )) { error in
+            XCTAssertEqual(error as? MemorizationRepositoryError, .notFound)
+        }
+        XCTAssertTrue(repository.fetchAll().isEmpty)
+    }
+
     func testDeleteRemovesSet() throws {
         let (repository, _) = try makeRepository()
         let set = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)

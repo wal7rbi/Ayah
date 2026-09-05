@@ -22,6 +22,27 @@ this file remains the complete legal and provenance record.
   The full upstream MIT notice is bundled as
   `Resources/ThirdParty/Adhan-LICENSE.txt`.
 
+### DynamicNotchKit — adapted UI source
+- **Source**: https://github.com/MrKai77/DynamicNotchKit
+- **Verified revision**: `cd0b3e52d537db115ad3a9d89601f20e0bee8d27`.
+- **License**: MIT, copyright (c) 2025 Kai Azim. The complete upstream
+  notice is bundled as `Resources/ThirdParty/DynamicNotchKit-LICENSE.txt`.
+- **Used for**: the concave-top path in `App/UI/Notch/NotchShape.swift`,
+  and the rounded floating-card presentation and slide-animation approach
+  adapted for Ayah's solid-black non-notch popup. The relevant upstream
+  files are `Views/NotchShape.swift`, `Views/NotchlessView.swift`, and
+  `DynamicNotch/DynamicNotchStyle.swift` under `Sources/DynamicNotchKit/`.
+  Ayah adapts these locally; DynamicNotchKit is not a linked framework or
+  package dependency.
+- **Provenance correction**: the shape was previously described in its
+  source comment as ported from boring.notch, while this document claimed
+  no code had been copied. Its `path(in:)` matches both boring.notch and
+  the original DynamicNotchKit implementation, ignoring whitespace.
+  boring.notch itself credits DynamicNotchKit. The attribution and license
+  for this reused shape are now explicitly recorded against the verified
+  original MIT source. This does not establish the provenance or licensing
+  of unrelated code in either project.
+
 ## Bundled data resources
 
 ### Quran text — King Fahd Glorious Quran Printing Complex (KFGQPC)
@@ -108,25 +129,26 @@ this file remains the complete legal and provenance record.
   The attribution and license link are bundled as
   `Resources/ThirdParty/GeoNames-NOTICE.txt`.
 
-## Reference-only projects (not bundled, not copied)
-
-These open-source notch-UI projects were studied during architecture
-research to understand proven implementation techniques. No code from any
-of them is copied into Ayah.
+## Other projects studied
 
 - **NotchDrop** — https://github.com/Lakr233/NotchDrop — MIT license.
-  Safe to reference or reuse under its license terms if ever needed.
-- **boring.notch** — https://github.com/TheBoredTeam/boring.notch —
-  **GPL-3.0** (copyleft). Explicitly **not** to be copied from: doing so
-  would obligate Ayah to also be licensed GPL-3.0. Studied only for
-  general technique (window layering, geometry approach), not code.
-- **NotchNook** — closed source, commercial. Nothing to reference or reuse.
+  Studied for windowing techniques; no identified source adaptation.
+- **boring.notch** — https://github.com/TheBoredTeam/boring.notch — GPL-3.0.
+  Studied for notch geometry and windowing. Ayah's earlier shape comment
+  named this project as its source; the matching shape is also credited
+  there to DynamicNotchKit, whose original MIT source is recorded above.
+  Do not assume other boring.notch code shares that license. A broader
+  exact-token comparison found no other substantial matches in Ayah's
+  application/package Swift sources; this is a similarity check, not proof
+  of independent authorship.
+- **NotchNook** — closed source, commercial; no source code reused.
 
 ## Summary table
 
 | Resource | License | Redistribution status |
 |---|---|---|
 | Adhan Swift | MIT | Clean |
+| DynamicNotchKit UI adaptations | MIT | Copyright and license notice bundled |
 | GeoNames location data (filtered subset) | CC BY 4.0 | Clean, attribution required |
 | KFGQPC Quran text (Hafs, Uthmanic) | None published | **Risk accepted, documented** |
 | KFGQPC Uthmanic Hafs font | Licensed (embedded EULA) | **Clean** |

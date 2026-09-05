@@ -3,10 +3,6 @@ import Foundation
 import XCTest
 @testable import AyahKit
 
-/// Only `PrayerAlertScheduler.prayerAlertEvents(...)` is tested here — the
-/// pure "what to show" half. The actual `DispatchSourceTimer`
-/// arm/fire/rearm cycle in `armNextTimer()` isn't unit-testable, the same
-/// way `VerseScheduler`'s timer firing isn't.
 final class PrayerAlertSchedulerTests: XCTestCase {
     // See PrayerCalculatorTests.swift for why `Coordinates` is constructed
     // inline rather than as a standalone typed property in a file that
@@ -150,7 +146,7 @@ final class PrayerAlertSchedulerTests: XCTestCase {
     }
 
     @MainActor
-    func testClockAndTimeZoneChangesRearmTheScheduler() throws {
+    func testClockAndTimeZoneChangesRearmTheScheduler() async throws {
         let center = NotificationCenter()
         let scheduler = PrayerAlertScheduler(
             quranRepository: nil,
@@ -162,14 +158,90 @@ final class PrayerAlertSchedulerTests: XCTestCase {
         let initial = scheduler.rearmGeneration
 
         center.post(name: .NSSystemClockDidChange, object: nil)
+        await Task.yield()
         XCTAssertEqual(scheduler.rearmGeneration, initial + 1)
         center.post(name: .NSSystemTimeZoneDidChange, object: nil)
+        await Task.yield()
         XCTAssertEqual(scheduler.rearmGeneration, initial + 2)
 
         scheduler.stop()
         let stopped = scheduler.rearmGeneration
         center.post(name: .NSSystemClockDidChange, object: nil)
+        await Task.yield()
         XCTAssertEqual(scheduler.rearmGeneration, stopped)
+    }
+
+    @MainActor
+    func testSettingsChangesUsePublishedSnapshotAndCancelledCallbacksDoNotFire() throws {
+        let settingsStore = SettingsStore(defaults: try isolatedDefaults())
+        settingsStore.settings = AppSettings(
+            prayerLocationSource: .currentLocation,
+            currentLocationCoordinates: Coordinates(latitude: riyadhLatitude, longitude: riyadhLongitude),
+            currentLocationTimeZoneIdentifier: riyadhTimeZone,
+            prayerNotificationReminderMinutes: 0
+        )
+        let referenceNow = date(year: 2026, month: 6, day: 15)
+        let timer = ManualOneShotTimer()
+        let scheduler = PrayerAlertScheduler(
+            quranRepository: nil, locationRepository: nil, settingsStore: settingsStore,
+            now: { referenceNow }, timerScheduling: timer
+        )
+        var alerts: [PrayerAlertDisplay] = []
+        scheduler.start { alerts.append($0) }
+        XCTAssertTrue(timer.entries.isEmpty)
+        settingsStore.settings.arePrayerNotificationsEnabled = true
+        XCTAssertEqual(timer.entries.count, 1)
+        let first = try XCTUnwrap(timer.entries.last)
+        settingsStore.settings.prayerNotificationReminderMinutes = 15
+        let reminder = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(reminder.interval, first.interval - 900, accuracy: 0.01)
+        XCTAssertTrue(first.isCancelled)
+        first.fire()
+        XCTAssertTrue(alerts.isEmpty)
+        settingsStore.settings.arePrayerNotificationsEnabled = false
+        XCTAssertTrue(reminder.isCancelled)
+        let count = timer.entries.count
+        reminder.fire()
+        XCTAssertTrue(alerts.isEmpty)
+        XCTAssertEqual(timer.entries.count, count)
+        settingsStore.settings.arePrayerNotificationsEnabled = true
+        let latest = try XCTUnwrap(timer.entries.last)
+        scheduler.stop()
+        latest.fire()
+        scheduler.rearm()
+        XCTAssertTrue(alerts.isEmpty)
+        XCTAssertEqual(timer.entries.count, count + 1)
+    }
+
+    @MainActor
+    func testChangingLocationAndCalculationMethodRecomputesDeadlineImmediately() throws {
+        let settingsStore = SettingsStore(defaults: try isolatedDefaults())
+        settingsStore.settings = AppSettings(
+            prayerLocationSource: .currentLocation,
+            currentLocationCoordinates: Coordinates(latitude: riyadhLatitude, longitude: riyadhLongitude),
+            currentLocationTimeZoneIdentifier: riyadhTimeZone,
+            arePrayerNotificationsEnabled: true, prayerNotificationReminderMinutes: 0
+        )
+        let referenceNow = date(year: 2026, month: 6, day: 15)
+        let timer = ManualOneShotTimer()
+        let scheduler = PrayerAlertScheduler(
+            quranRepository: nil, locationRepository: nil, settingsStore: settingsStore,
+            now: { referenceNow }, timerScheduling: timer
+        )
+        scheduler.start { _ in }
+        defer { scheduler.stop() }
+        var updated = settingsStore.settings
+        updated.currentLocationCoordinates = Coordinates(latitude: 21.4225, longitude: 39.8262)
+        updated.prayerCalculationMethod = .northAmerica
+        settingsStore.settings = updated
+        let expected = try XCTUnwrap(PrayerAlertScheduler.prayerAlertEvents(
+            for: referenceNow, coordinates: updated.currentLocationCoordinates!,
+            calculationMethod: .northAmerica, asrMadhab: updated.asrMadhab,
+            reminderMinutes: 0, timeZone: TimeZone(identifier: riyadhTimeZone)!, now: referenceNow
+        ).min { $0.fireDate < $1.fireDate })
+        XCTAssertEqual(try XCTUnwrap(timer.entries.last).interval,
+                       expected.fireDate.timeIntervalSince(referenceNow), accuracy: 0.01)
+        XCTAssertEqual(timer.entries.count, 2)
     }
 
     private func isolatedDefaults() throws -> UserDefaults {

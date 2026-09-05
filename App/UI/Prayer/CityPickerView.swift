@@ -32,12 +32,13 @@ struct CityPickerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let results = filteredCities
+        return VStack(spacing: 0) {
             TextField("بحث عن مدينة", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .padding(8)
 
-            if filteredCities.isEmpty {
+            if results.isEmpty {
                 Spacer()
                 Text("لا توجد نتائج")
                     .foregroundStyle(.secondary)
@@ -50,7 +51,7 @@ struct CityPickerView: View {
                 // gesture silently never fired). A `Button` per row goes
                 // through AppKit's normal action mechanism instead and
                 // is the reliable idiom for "tap a List row" on macOS.
-                List(filteredCities) { city in
+                List(results) { city in
                     Button {
                         onSelect(city)
                     } label: {

@@ -10,16 +10,25 @@ import SwiftUI
 /// accessory app.
 @MainActor
 final class MemorizationSetsWindowController: NSWindowController {
-    convenience init(quranRepository: QuranRepository, memorizationRepository: MemorizationRepository) {
-        let view = MemorizationSetsView(quranRepository: quranRepository, memorizationRepository: memorizationRepository)
+    private let model: MemorizationSetsModel
+
+    init(quranRepository: QuranRepository, memorizationRepository: MemorizationRepository) {
+        model = MemorizationSetsModel(repository: memorizationRepository)
+        let view = MemorizationSetsView(quranRepository: quranRepository, memorizationRepository: memorizationRepository, model: model)
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "مجموعات الحفظ"
         window.styleMask = [.titled, .closable, .resizable]
         window.setContentSize(NSSize(width: 420, height: 480))
-        self.init(window: window)
+        super.init(window: window)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
     func show() {
+        model.reload()
         if let window, !window.isVisible {
             window.center()
         }
