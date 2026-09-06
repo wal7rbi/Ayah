@@ -2,216 +2,174 @@ import AppKit
 import AyahKit
 import Combine
 
-/// Owns the notch panel's lifecycle and geometry. On a Mac with a
-/// physical notch, the panel sits directly over the notch cutout and stays
-/// visible as a small collapsed pill at all times. On a Mac without one,
-/// `attachToNotchIfAvailable()` reuses the same panel/view stack as a
-/// floating bar pinned below the menu bar instead — hidden while idle and
-/// shown only while a verse batch or prayer alert is actually active,
-/// since there's no physical camera housing for a permanent pill to blend
-/// into (see ARCHITECTURE.md §4, "Fallback for Macs without a notch").
-/// Either way, `StatusItemController` remains the app's one Settings
-/// surface. Switching between the two modes while the app is already
-/// running (e.g. a notched MacBook entering clamshell mode with only an
-/// external display attached) is out of scope — the mode is picked once,
-/// here, at attach time.
+/// A value snapshot permits display transitions to be tested without creating NSScreens.
+struct NotchScreen {
+    let frame: CGRect
+    let visibleFrame: CGRect
+    let notchFrame: CGRect?
+}
+
+@MainActor
+protocol NotchPanelPresenting: AnyObject {
+    var isVisible: Bool { get }
+    func place(at frame: CGRect)
+    func show()
+    func hide()
+    func animate(to frame: CGRect, opening: Bool, completion: @escaping @MainActor () -> Void)
+}
+
+/// Owns one presentation while retaining content and schedulers across display changes.
+/// Physical notches retain their collapsed pill; other screens get a black floating card.
 @MainActor
 final class NotchController {
-    private var panel: NotchPanel?
+    private var panel: (any NotchPanelPresenting)?
     private let viewModel: NotchViewModel
     private let prayerAlertScheduler: PrayerAlertScheduler?
-    private var isFallbackMode = false
-    private var fallbackVisibilityCancellable: AnyCancellable?
-    private var fallbackHideTask: Task<Void, Never>?
+    private let screens: () -> [NotchScreen]
+    private let makePanel: (NotchViewModel, Bool) -> any NotchPanelPresenting
+    private let reduceMotion: () -> Bool
+    private var isPhysicalNotch: Bool?
+    private var targetFrame = CGRect.zero
+    private var hiddenFrame = CGRect.zero
+    private var visibilityCancellable: AnyCancellable?
+    private var presentationGeneration: UInt = 0
+    private var hasStarted = false
 
-    init(
+    convenience init(
         quranRepository: QuranRepository?,
         verseScheduler: VerseScheduler?,
         prayerAlertScheduler: PrayerAlertScheduler?,
         settingsStore: SettingsStore,
         lastShownStore: LastShownStore
     ) {
-        self.prayerAlertScheduler = prayerAlertScheduler
-        self.viewModel = NotchViewModel(
-            quranRepository: quranRepository,
-            verseScheduler: verseScheduler,
-            prayerAlertScheduler: prayerAlertScheduler,
-            settingsStore: settingsStore,
-            lastShownStore: lastShownStore
+        self.init(
+            viewModel: NotchViewModel(
+                quranRepository: quranRepository,
+                verseScheduler: verseScheduler,
+                prayerAlertScheduler: prayerAlertScheduler,
+                settingsStore: settingsStore,
+                lastShownStore: lastShownStore
+            ),
+            prayerAlertScheduler: prayerAlertScheduler
         )
     }
 
-    func replayLastShown() {
-        viewModel.replayLastShown()
+    init(
+        viewModel: NotchViewModel,
+        prayerAlertScheduler: PrayerAlertScheduler? = nil,
+        screens: @escaping () -> [NotchScreen] = {
+            NSScreen.screens.map {
+                NotchScreen(frame: $0.frame, visibleFrame: $0.visibleFrame, notchFrame: NotchController.notchFrame(on: $0))
+            }
+        },
+        makePanel: @escaping (NotchViewModel, Bool) -> any NotchPanelPresenting = {
+            NotchPanel(contentRect: .zero, viewModel: $0, isPhysicalNotch: $1)
+        },
+        reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    ) {
+        self.viewModel = viewModel
+        self.prayerAlertScheduler = prayerAlertScheduler
+        self.screens = screens
+        self.makePanel = makePanel
+        self.reduceMotion = reduceMotion
     }
+
+    func replayLastShown() { viewModel.replayLastShown() }
 
     func attachToNotchIfAvailable() {
-        AppPerformanceSignposts.measure("NotchPresentation") {
-            if let screen = Self.notchedScreen() {
-                attachPhysicalNotch(on: screen)
-            } else {
-                attachFallbackBar()
-            }
-        }
-    }
-
-    private func attachPhysicalNotch(on screen: NSScreen) {
-        let panel = NotchPanel(contentRect: .zero, viewModel: viewModel, isPhysicalNotch: true)
-        self.panel = panel
-        reposition(panel: panel, on: screen)
-        panel.orderFrontRegardless()
-        viewModel.startDisplayTimer()
-        viewModel.startPrayerAlerts()
-        registerObservers()
-    }
-
-    /// Floating bar for Macs with no physical notch: the same panel/view
-    /// stack, pinned below the menu bar on the primary screen instead of
-    /// over a notch cutout, and only ordered on-screen while
-    /// `viewModel.isExpanded` — a verse batch or prayer alert is actually
-    /// showing — rather than left visible as an always-there pill.
-    private func attachFallbackBar() {
-        guard let screen = NSScreen.screens.first else { return }
-        isFallbackMode = true
-
-        let panel = NotchPanel(contentRect: .zero, viewModel: viewModel, isPhysicalNotch: false)
-        self.panel = panel
-        repositionFallback(panel: panel, on: screen)
-        viewModel.startDisplayTimer()
-        viewModel.startPrayerAlerts()
-
-        fallbackVisibilityCancellable = viewModel.$isExpanded
-            .sink { [weak self] isExpanded in
-                self?.setFallbackBarVisible(isExpanded)
-            }
-
-        registerObservers()
-    }
-
-    /// `@Published` publishes from `willSet`, so this runs one render pass
-    /// before SwiftUI has drawn the new state. Showing early is harmless —
-    /// the card's own transition plays with the panel already up. Hiding
-    /// early is not: ordering the panel out before the collapse animation
-    /// runs makes the bar vanish rather than close. So the hide waits the
-    /// animation out first, and re-checks `isExpanded` in case the bar was
-    /// re-expanded in the meantime.
-    private func setFallbackBarVisible(_ isVisible: Bool) {
-        fallbackHideTask?.cancel()
-        fallbackHideTask = nil
-        guard let panel else { return }
-        guard !isVisible else {
-            panel.orderFrontRegardless()
+        guard !hasStarted else {
+            refreshPresentation()
             return
         }
-        // Nothing to animate away: the sink's first emission at subscribe
-        // time, when the panel was never ordered in; or Reduce Motion, where
-        // there is no animation in the first place.
-        guard panel.isVisible, let duration = NotchViewModel.collapseAnimationDuration else {
-            panel.orderOut(nil)
-            return
+        hasStarted = true
+        refreshPresentation()
+        visibilityCancellable = viewModel.$isExpanded.removeDuplicates().sink { [weak self] expanded in
+            self?.setVisible(expanded, animated: true)
         }
-        fallbackHideTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: duration)
-            guard !Task.isCancelled, let self, !self.viewModel.isExpanded else { return }
-            self.fallbackHideTask = nil
-            self.panel?.orderOut(nil)
-        }
-    }
-
-    private func registerObservers() {
+        viewModel.startDisplayTimer()
+        viewModel.startPrayerAlerts()
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(screenParametersChanged),
-            name: NSApplication.didChangeScreenParametersNotification,
-            object: nil
+            self, selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil
         )
-        // A prayer-alert timer's already-armed deadline can pass while the
-        // Mac is asleep — re-arm against the (now different) soonest
-        // upcoming event on wake, since there's no separate midnight
-        // timer to otherwise catch this the way the deleted
-        // UNUserNotificationCenter-based scheduler's OS-owned triggers did.
         NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(systemDidWake),
-            name: NSWorkspace.didWakeNotification,
-            object: nil
+            self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil
         )
     }
 
-    @objc private func screenParametersChanged() {
-        guard let panel else { return }
-        if isFallbackMode {
-            guard let screen = NSScreen.screens.first else { return }
-            repositionFallback(panel: panel, on: screen)
-            return
+    /// Replacing only the panel keeps a display transition from selecting verses,
+    /// advancing memorization, or creating a second scheduler subscription.
+    func refreshPresentation() {
+        AppPerformanceSignposts.measure("NotchPresentation") {
+            presentationGeneration &+= 1
+            let available = screens()
+            guard let screen = available.first(where: { $0.notchFrame != nil }) ?? available.first else {
+                panel?.hide()
+                panel = nil
+                isPhysicalNotch = nil
+                return
+            }
+            let physical = screen.notchFrame != nil
+            let replacing = panel == nil || physical != isPhysicalNotch
+            if replacing {
+                panel?.hide()
+                panel = makePanel(viewModel, physical)
+                isPhysicalNotch = physical
+            }
+            let size = NotchMetrics.expandedSize
+            if let notch = screen.notchFrame {
+                viewModel.collapsedSize = notch.size
+                targetFrame = CGRect(x: notch.midX - size.width / 2,
+                                     y: screen.frame.maxY - size.height, width: size.width, height: size.height)
+                panel?.place(at: targetFrame)
+                panel?.show()
+            } else {
+                viewModel.collapsedSize = size
+                targetFrame = CGRect(x: screen.frame.midX - size.width / 2,
+                                     y: screen.visibleFrame.maxY - FloatingPopupMetrics.topGap - size.height,
+                                     width: size.width, height: size.height)
+                hiddenFrame = CGRect(x: targetFrame.minX, y: screen.frame.maxY,
+                                     width: size.width, height: size.height)
+                if replacing { panel?.place(at: hiddenFrame) }
+                setVisible(viewModel.isExpanded, animated: replacing)
+            }
         }
-        guard let screen = Self.notchedScreen() else {
-            panel.orderOut(nil)
-            return
+    }
+
+    private func setVisible(_ visible: Bool, animated: Bool) {
+        guard isPhysicalNotch == false, let panel else { return }
+        presentationGeneration &+= 1
+        let generation = presentationGeneration
+        if visible {
+            if !panel.isVisible {
+                panel.place(at: reduceMotion() ? targetFrame : hiddenFrame)
+                panel.show()
+            }
+            if animated && !reduceMotion() {
+                panel.animate(to: targetFrame, opening: true, completion: {})
+            } else {
+                panel.place(at: targetFrame)
+            }
+        } else if panel.isVisible && animated && !reduceMotion() {
+            panel.animate(to: hiddenFrame, opening: false) { [weak self, weak panel] in
+                guard let self, self.presentationGeneration == generation else { return }
+                panel?.hide()
+            }
+        } else {
+            panel.hide()
+            panel.place(at: hiddenFrame)
         }
-        reposition(panel: panel, on: screen)
-        if !panel.isVisible {
-            panel.orderFrontRegardless()
-        }
     }
 
-    @objc private func systemDidWake() {
-        prayerAlertScheduler?.rearm()
-    }
+    @objc private func screenParametersChanged() { refreshPresentation() }
+    @objc private func systemDidWake() { prayerAlertScheduler?.rearm() }
 
-    private func reposition(panel: NotchPanel, on screen: NSScreen) {
-        guard let notchFrame = Self.notchFrame(on: screen) else { return }
-
-        viewModel.collapsedSize = CGSize(width: notchFrame.width, height: notchFrame.height)
-
-        let size = NotchMetrics.expandedSize
-        let origin = NSPoint(
-            x: notchFrame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height
-        )
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-    }
-
-    /// Positions the fallback panel centered below the menu bar on the
-    /// given screen. `visibleFrame` (not `frame`) excludes the menu bar
-    /// strip, so the bar sits flush underneath it instead of overlapping
-    /// menu-bar items — there's no notch cutout here to anchor to instead.
-    private func repositionFallback(panel: NotchPanel, on screen: NSScreen) {
-        let size = NotchMetrics.expandedSize
-        // No cutout here to grow out of, and no real notch geometry to
-        // derive a collapsed size from the way `reposition(panel:on:)` does.
-        // Matching the expanded size keeps the shape from resizing at all,
-        // so the panel can't be ordered on screen still drawing the
-        // default 200x32 collapsed stub for a frame before it grows; the
-        // card's scale/opacity transition is the whole animation instead.
-        viewModel.collapsedSize = size
-        let origin = NSPoint(
-            x: screen.frame.midX - size.width / 2,
-            y: screen.visibleFrame.maxY - size.height
-        )
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-    }
-
-    /// The built-in display reporting a non-zero top safe-area inset,
-    /// i.e. the one with a physical notch.
-    static func notchedScreen() -> NSScreen? {
-        NSScreen.screens.first { $0.safeAreaInsets.top > 0 }
-    }
-
-    /// The exact notch cutout rect (in screen coordinates): the gap
-    /// between the auxiliary areas that flank the camera housing.
     static func notchFrame(on screen: NSScreen) -> CGRect? {
         guard screen.safeAreaInsets.top > 0,
-              let leftArea = screen.auxiliaryTopLeftArea,
-              let rightArea = screen.auxiliaryTopRightArea else {
-            return nil
-        }
-        let height = screen.safeAreaInsets.top
-        return CGRect(
-            x: leftArea.maxX,
-            y: screen.frame.maxY - height,
-            width: rightArea.minX - leftArea.maxX,
-            height: height
-        )
+              let left = screen.auxiliaryTopLeftArea,
+              let right = screen.auxiliaryTopRightArea,
+              right.minX > left.maxX else { return nil }
+        return CGRect(x: left.maxX, y: screen.frame.maxY - screen.safeAreaInsets.top,
+                      width: right.minX - left.maxX, height: screen.safeAreaInsets.top)
     }
 }

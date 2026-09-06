@@ -1,3 +1,4 @@
+import AppKit
 import AyahKit
 import SwiftUI
 
@@ -25,11 +26,14 @@ struct NotchContentView: View {
         return shape
             .fill(.black)
             .frame(
-                width: viewModel.isExpanded ? NotchMetrics.expandedSize.width : viewModel.collapsedSize.width,
-                height: viewModel.isExpanded ? NotchMetrics.expandedSize.height : viewModel.collapsedSize.height
+                width: !isPhysicalNotch || viewModel.isExpanded ? NotchMetrics.expandedSize.width : viewModel.collapsedSize.width,
+                height: !isPhysicalNotch || viewModel.isExpanded ? NotchMetrics.expandedSize.height : viewModel.collapsedSize.height
             )
             .overlay {
-                if viewModel.isExpanded {
+                if !isPhysicalNotch {
+                    // The complete card remains mounted through its window's closing slide.
+                    cardContent
+                } else if viewModel.isExpanded {
                     cardContent.transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
                 }
             }
@@ -48,23 +52,14 @@ struct NotchContentView: View {
             }
     }
 
-    /// A concave notch flare on real notch hardware; a plain flat-topped,
-    /// rounded-bottom bar on the non-notch fallback, where the panel sits
-    /// flush against the menu bar rather than flaring out of a camera
-    /// housing above it. Type-erased since both branches back the same
-    /// `shape` value used for both `.fill` and `.clipShape` below.
+    /// MIT-credited DynamicNotchKit geometry for physical notches; its floating
+    /// rounded-card style is adapted with an opaque black background for Ayah.
     private var shape: AnyShape {
         let topRadius: CGFloat = viewModel.isExpanded ? 14 : 6
         let bottomRadius: CGFloat = viewModel.isExpanded ? 26 : 10
         guard isPhysicalNotch else {
             return AnyShape(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: bottomRadius,
-                    bottomTrailingRadius: bottomRadius,
-                    topTrailingRadius: 0,
-                    style: .continuous
-                )
+                RoundedRectangle(cornerRadius: FloatingPopupMetrics.cornerRadius, style: .continuous)
             )
         }
         return AnyShape(Self.notchShape(topRadius: topRadius, bottomRadius: bottomRadius))
@@ -112,7 +107,7 @@ struct NotchContentView: View {
         .padding(.top, isPhysicalNotch ? max(20, viewModel.collapsedSize.height + 12) : 20)
         .padding([.horizontal, .bottom], 20)
         .frame(width: NotchMetrics.expandedSize.width, height: NotchMetrics.expandedSize.height)
-        .animation(.easeInOut(duration: 0.35), value: viewModel.content)
+        .animation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : .easeInOut(duration: 0.35), value: viewModel.content)
     }
 
     private func prayerAlertCard(event: PrayerAlertEvent, ayah: QuranAyah?, surah: Surah?) -> some View {
@@ -154,16 +149,8 @@ struct NotchContentView: View {
             : "حان الآن وقت صلاة \(event.prayerNameArabic)"
     }
 
-    /// A concave top flare (ported from boring.notch's `NotchShape`, see
-    /// `NotchShape.swift`) plus a larger, convex bottom radius — reads as
-    /// the panel growing organically out of the physical notch cutout
-    /// rather than sitting below it as a plain rounded rectangle. An
-    /// earlier attempt at this same silhouette (custom Path with
-    /// overshooting Bézier control points) measurably failed to render as
-    /// intended — verified by scanning rendered pixel rows, the top
-    /// corners came out sharp, not curved; boring.notch's simpler
-    /// quad-curve construction doesn't share that failure mode and was
-    /// re-verified by screenshot before shipping here.
+    /// The shape was encountered through boring.notch and is also present in
+    /// the verified MIT-licensed DynamicNotchKit original. See NotchShape.swift.
     private static func notchShape(topRadius: CGFloat, bottomRadius: CGFloat) -> NotchShape {
         NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius)
     }

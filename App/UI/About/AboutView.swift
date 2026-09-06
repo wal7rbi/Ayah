@@ -29,6 +29,11 @@ struct AboutView: View {
             destination: "https://github.com/batoulapps/adhan-swift"
         ),
         ExternalLink(
+            id: "dynamicnotchkit",
+            label: "DynamicNotchKit — المصدر ورخصة MIT",
+            destination: "https://github.com/MrKai77/DynamicNotchKit"
+        ),
+        ExternalLink(
             id: "geonames",
             label: "GeoNames — مصدر بيانات المدن",
             destination: "https://www.geonames.org/"
@@ -96,6 +101,10 @@ struct AboutView: View {
                 text: "تُحسب أوقات الصلاة محليًا باستخدام مكتبة Adhan Swift من Batoul Apps، المرخصة برخصة MIT."
             )
             creditSection(
+                title: "واجهة النوتش والعرض العائم",
+                text: "شكل النوتش والعرض العائم وحركة الانزلاق مقتبسة من DynamicNotchKit للمطور Kai Azim، المرخص برخصة MIT، مع تعديلات تناسب آية."
+            )
+            creditSection(
                 title: "بيانات المدن",
                 text: "يستخدم آية مجموعة مصفاة من بيانات GeoNames للمدن والإحداثيات والمناطق الزمنية، بترخيص CC BY 4.0."
             )
@@ -137,7 +146,7 @@ struct AboutView: View {
             Divider()
             Text("About Ayah")
                 .font(.headline)
-            Text("Ayah is an independent, open-source, fully offline macOS app. Quran text and the Uthmanic Hafs font come from the King Fahd Glorious Quran Printing Complex developer platform. Prayer times use Adhan Swift, and filtered city data comes from GeoNames. Source attribution does not imply affiliation, sponsorship, certification, or endorsement.")
+            Text("Ayah is an independent, open-source, fully offline macOS app. Quran text and the Uthmanic Hafs font come from the King Fahd Glorious Quran Printing Complex developer platform. Prayer times use Adhan Swift, and filtered city data comes from GeoNames. The notch shape and floating popup presentation adapt DynamicNotchKit by Kai Azim (MIT). Source attribution does not imply affiliation, sponsorship, certification, or endorsement.")
                 .font(.callout)
         }
         .environment(\.layoutDirection, .leftToRight)

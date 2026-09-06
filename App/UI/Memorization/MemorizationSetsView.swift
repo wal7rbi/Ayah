@@ -1,6 +1,26 @@
 import AyahKit
 import SwiftUI
 
+/// Shared with the retained window controller so every opening refreshes
+/// the list, even when SwiftUI does not run onAppear again.
+@MainActor
+final class MemorizationSetsModel: ObservableObject {
+    @Published private(set) var sets: [MemorizationSet] = []
+    @Published private(set) var loadErrorMessage: String?
+    private let repository: MemorizationRepository
+
+    init(repository: MemorizationRepository) {
+        self.repository = repository
+        reload()
+    }
+
+    func reload() {
+        sets = repository.fetchAll()
+        loadErrorMessage = repository.lastFetchError != nil
+            ? "تعذر تحميل مجموعات الحفظ. حاول مرة أخرى." : nil
+    }
+}
+
 /// Lists, creates, edits, enables/disables, and deletes memorization
 /// sets. `VerseScheduler` re-queries `memorizationRepository` fresh on
 /// every timer fire rather than caching (see
@@ -20,25 +40,19 @@ struct MemorizationSetsView: View {
     /// the user can interact with the window.
     private let surahs: [Surah]
 
-    @State private var sets: [MemorizationSet]
+    @ObservedObject private var model: MemorizationSetsModel
     @State private var editorTarget: EditorTarget?
-    @State private var loadErrorMessage: String?
     @State private var writeErrorMessage: String?
 
-    init(quranRepository: QuranRepository, memorizationRepository: MemorizationRepository) {
+    init(
+        quranRepository: QuranRepository,
+        memorizationRepository: MemorizationRepository,
+        model: MemorizationSetsModel
+    ) {
         self.quranRepository = quranRepository
         self.memorizationRepository = memorizationRepository
         self.surahs = quranRepository.surahs()
-        _sets = State(initialValue: memorizationRepository.fetchAll())
-        _loadErrorMessage = State(initialValue: Self.loadErrorMessage(for: memorizationRepository))
-    }
-
-    /// `fetchAll()` returns `[]` both when there are genuinely no sets and
-    /// when the read itself failed — `lastFetchError` is what
-    /// distinguishes them, so the empty-state text below only ever means
-    /// "no sets," never "something went wrong and we couldn't tell you."
-    private static func loadErrorMessage(for repository: MemorizationRepository) -> String? {
-        repository.lastFetchError != nil ? "تعذر تحميل مجموعات الحفظ. حاول مرة أخرى." : nil
+        self.model = model
     }
 
     private var surahsByNumber: [Int: Surah] {
@@ -64,7 +78,7 @@ struct MemorizationSetsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let loadErrorMessage {
+            if let loadErrorMessage = model.loadErrorMessage {
                 Text(loadErrorMessage)
                     .foregroundStyle(.red)
                     .padding(8)
@@ -75,14 +89,14 @@ struct MemorizationSetsView: View {
                     .padding(8)
                     .accessibilityLabel("تعذر حفظ تغييرات مجموعة الحفظ")
             }
-            if sets.isEmpty {
+            if model.sets.isEmpty {
                 Spacer()
                 Text("لا توجد مجموعات حفظ بعد")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
                 List {
-                    ForEach(sets) { set in
+                    ForEach(model.sets) { set in
                         row(for: set)
                     }
                 }
@@ -158,11 +172,6 @@ struct MemorizationSetsView: View {
             : "\(name) \(set.startAyah)-\(set.endAyah)"
     }
 
-    private func reload() {
-        sets = memorizationRepository.fetchAll()
-        loadErrorMessage = Self.loadErrorMessage(for: memorizationRepository)
-    }
-
     private func save(
         target: EditorTarget,
         surahNumber: Int, startAyah: Int, endAyah: Int,
@@ -175,29 +184,25 @@ struct MemorizationSetsView: View {
                     surahNumber: surahNumber, startAyah: startAyah, endAyah: endAyah,
                     repetitionMode: mode, isEnabled: isEnabled
                 )
-            case .edit(var set):
-                set.surahNumber = surahNumber
-                set.startAyah = startAyah
-                set.endAyah = endAyah
-                set.repetitionMode = mode
-                set.isEnabled = isEnabled
-                try memorizationRepository.update(set)
+            case .edit(let set):
+                try memorizationRepository.updateDetails(
+                    id: set.id, surahNumber: surahNumber, startAyah: startAyah,
+                    endAyah: endAyah, repetitionMode: mode, isEnabled: isEnabled
+                )
             }
             writeErrorMessage = nil
             editorTarget = nil
-            reload()
+            model.reload()
         } catch {
             writeErrorMessage = "تعذر حفظ مجموعة الحفظ. تحقق من القيم وحاول مرة أخرى."
         }
     }
 
     private func setEnabled(_ set: MemorizationSet, to isEnabled: Bool) {
-        var updated = set
-        updated.isEnabled = isEnabled
         do {
-            try memorizationRepository.update(updated)
+            try memorizationRepository.setEnabled(id: set.id, isEnabled: isEnabled)
             writeErrorMessage = nil
-            reload()
+            model.reload()
         } catch {
             writeErrorMessage = "تعذر تحديث مجموعة الحفظ. حاول مرة أخرى."
         }
@@ -207,7 +212,7 @@ struct MemorizationSetsView: View {
         do {
             try memorizationRepository.delete(id: set.id)
             writeErrorMessage = nil
-            reload()
+            model.reload()
         } catch {
             writeErrorMessage = "تعذر حذف مجموعة الحفظ. حاول مرة أخرى."
         }

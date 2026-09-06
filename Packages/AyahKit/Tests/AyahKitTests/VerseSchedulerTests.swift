@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 @testable import AyahKit
@@ -58,6 +59,98 @@ final class VerseSchedulerTests: XCTestCase {
             randomInt: randomInt
         )
         return (scheduler, memRepo)
+    }
+
+    @MainActor
+    func testDeferredStartAndIntervalChangesDoNotAdvanceUnseenVerses() throws {
+        let repo = try makeMemorizationRepository()
+        let set = try repo.create(surahNumber: 1, startAyah: 1, endAyah: 7, repetitionMode: .sequential)
+        let settings = try makeSettingsStore(AppSettings(
+            displayInterval: 900, versesPerDisplay: 1, memorizationWeightPercent: 100
+        ))
+        let timer = ManualOneShotTimer()
+        let scheduler = VerseScheduler(
+            quranRepository: try makeQuranRepository(), memorizationRepository: repo,
+            settingsStore: settings, randomDouble: { 0 }, randomInt: { $0.lowerBound },
+            timerScheduling: timer
+        )
+        var displayed: [[Int]] = []
+        scheduler.start(selectImmediately: false) { displayed.append($0.map(\.ayahNumber)) }
+        XCTAssertNil(repo.fetchAll().first { $0.id == set.id }?.cursorAyah)
+        XCTAssertTrue(displayed.isEmpty)
+        let initial = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(initial.interval, 900)
+        settings.settings.displayInterval = 1800
+        let longer = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(longer.interval, 1800)
+        settings.settings.displayInterval = 300
+        let shorter = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(shorter.interval, 300)
+        XCTAssertTrue(initial.isCancelled)
+        XCTAssertTrue(longer.isCancelled)
+        initial.fire()
+        longer.fire()
+        XCTAssertTrue(displayed.isEmpty)
+        XCTAssertNil(repo.fetchAll().first { $0.id == set.id }?.cursorAyah)
+        shorter.fire()
+        XCTAssertEqual(displayed, [[1]])
+        XCTAssertEqual(repo.fetchAll().first { $0.id == set.id }?.cursorAyah, 2)
+        let next = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(next.interval, 300)
+        let count = timer.entries.count
+        settings.settings.versesPerDisplay = 2
+        XCTAssertEqual(timer.entries.count, count, "Unrelated settings must not reset the deadline.")
+        scheduler.stop()
+        next.fire()
+        XCTAssertEqual(displayed, [[1]])
+        XCTAssertEqual(timer.entries.count, count)
+        scheduler.start { displayed.append($0.map(\.ayahNumber)) }
+        XCTAssertEqual(displayed, [[1], [2, 3]])
+        scheduler.stop()
+    }
+
+    @MainActor
+    func testStartingFromPublishedSnapshotUsesNewSelectionAndInterval() throws {
+        let timer = ManualOneShotTimer()
+        let settings = try makeSettingsStore(AppSettings(isVerseDisplayEnabled: false, displayInterval: 900))
+        let repository = try makeMemorizationRepository()
+        _ = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        let scheduler = VerseScheduler(quranRepository: try makeQuranRepository(),
+                                      memorizationRepository: repository, settingsStore: settings,
+                                      randomDouble: { 0 }, timerScheduling: timer)
+        var shown: [[Int]] = []
+        let subscription = settings.$settings
+            .removeDuplicates { $0.isVerseDisplayEnabled == $1.isVerseDisplayEnabled }
+            .sink { snapshot in
+                guard snapshot.isVerseDisplayEnabled else { return }
+                scheduler.start(initialSettings: snapshot) { shown.append($0.map(\.ayahNumber)) }
+            }
+        var next = settings.settings
+        next.isVerseDisplayEnabled = true
+        next.displayInterval = 300
+        next.versesPerDisplay = 1
+        next.memorizationWeightPercent = 100
+        settings.settings = next
+        XCTAssertEqual(shown, [[1]])
+        XCTAssertEqual(timer.entries.last?.interval, 300)
+        settings.settings.displayInterval = 900
+        XCTAssertEqual(timer.entries.last?.interval, 900)
+        XCTAssertEqual(shown, [[1]], "Changing intervals does not advance the cursor")
+        scheduler.stop()
+        withExtendedLifetime(subscription) {}
+    }
+
+    @MainActor
+    func testStoppingInsideDeliveryDoesNotRearm() throws {
+        let timer = ManualOneShotTimer()
+        let scheduler = VerseScheduler(
+            quranRepository: try makeQuranRepository(),
+            memorizationRepository: try makeMemorizationRepository(),
+            settingsStore: try makeSettingsStore(AppSettings()), timerScheduling: timer
+        )
+        scheduler.start(selectImmediately: false) { _ in scheduler.stop() }
+        try XCTUnwrap(timer.entries.last).fire()
+        XCTAssertEqual(timer.entries.count, 1)
     }
 
     func testFallsBackToGeneralPoolWhenNoMemorizationSetsExist() throws {

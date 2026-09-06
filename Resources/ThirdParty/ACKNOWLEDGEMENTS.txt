@@ -27,6 +27,16 @@ Adhan Swift — Batoul Apps
 Copyright (c) 2016 Batoul Apps. Licensed under the MIT License.
 https://github.com/batoulapps/adhan-swift
 
+DynamicNotchKit — Kai Azim
+-------------------------
+شكل النوتش والعرض العائم ذي الزوايا المستديرة وحركة الانزلاق مقتبسة من
+DynamicNotchKit بترخيص MIT. يستخدم آية بطاقة سوداء مع تعديلات تناسب التطبيق.
+جرى التعرف على شكل النوتش أولًا في boring.notch، الذي ينسبه إلى DynamicNotchKit،
+ثم التحقق من مطابقته للمصدر الأصلي المرخص برخصة MIT.
+Copyright (c) 2025 Kai Azim. Licensed under the MIT License.
+https://github.com/MrKai77/DynamicNotchKit
+النص الكامل للرخصة مرفق في DynamicNotchKit-LICENSE.txt.
+
 GeoNames
 --------
 يتضمن آية مجموعة مصفاة من بيانات المدن والإحداثيات والمناطق الزمنية من
@@ -62,6 +72,17 @@ Adhan Swift — Batoul Apps
 Ayah uses Adhan Swift 1.5.0 for fully offline prayer-time calculation.
 Copyright (c) 2016 Batoul Apps. Licensed under the MIT License.
 https://github.com/batoulapps/adhan-swift
+
+DynamicNotchKit — Kai Azim
+-------------------------
+Ayah adapts its concave notch shape and rounded floating-card slide presentation
+from DynamicNotchKit, with a solid-black appearance and application-specific
+behavior. The shape was first encountered in boring.notch, which credits
+DynamicNotchKit, and verified against the original MIT source at revision
+cd0b3e52d537db115ad3a9d89601f20e0bee8d27. No framework dependency is added.
+Copyright (c) 2025 Kai Azim. Licensed under the MIT License.
+https://github.com/MrKai77/DynamicNotchKit
+The full license is bundled in DynamicNotchKit-LICENSE.txt.
 
 GeoNames
 --------

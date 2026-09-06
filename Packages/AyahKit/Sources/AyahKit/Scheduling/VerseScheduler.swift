@@ -1,3 +1,4 @@
+import Combine
 import Dispatch
 import Foundation
 
@@ -5,7 +6,8 @@ import Foundation
 /// timer, per ARCHITECTURE.md's "Weighted verse selection" and "Verses
 /// per display" sections.
 ///
-/// `selectNextVerses()` is a pure, synchronous function — fully testable
+/// `selectNextVerses()` is synchronous and advances a selected sequential
+/// set’s persisted cursor. It is fully testable
 /// without a timer. `start(onVersesSelected:)` layers a single
 /// self-rearming `DispatchSourceTimer` on top (armed only for the next
 /// event, never a repeating timer or a polling loop). Zero leeway rather
@@ -14,11 +16,8 @@ import Foundation
 /// firing exactly when picked matters more than the marginal system-wide
 /// wakeup-coalescing benefit a single infrequent timer would give up.
 ///
-/// Not `@MainActor`: the timer runs on the main queue by construction,
-/// but the type itself does no AppKit work. Callers that need to touch
-/// `@MainActor` state from `onVersesSelected` (e.g. `NotchViewModel`) are
-/// responsible for hopping back onto their own actor, the same way the
-/// Stage 4 placeholder timer did.
+/// Timer lifecycle and callbacks are main-actor isolated; synchronous
+/// selection remains available independently for repository-level use.
 public final class VerseScheduler {
     private let quranRepository: QuranRepository
     private let memorizationRepository: MemorizationRepository
@@ -26,8 +25,11 @@ public final class VerseScheduler {
     private let randomDouble: () -> Double
     private let randomInt: (ClosedRange<Int>) -> Int
 
-    private var timerSource: DispatchSourceTimer?
-    private var onVersesSelected: (([QuranAyah]) -> Void)?
+    private let timerScheduling: (any OneShotTimerScheduling)?
+    @MainActor private var timerSource: (any OneShotTimerToken)?
+    @MainActor private var onVersesSelected: (@MainActor ([QuranAyah]) -> Void)?
+    @MainActor private var intervalCancellable: AnyCancellable?
+    @MainActor private var scheduleGeneration: UInt = 0
 
     /// The error from the most recent sequential-set cursor write inside
     /// `selectFromMemorizationSets`, or `nil` if the last one succeeded
@@ -43,40 +45,60 @@ public final class VerseScheduler {
         memorizationRepository: MemorizationRepository,
         settingsStore: SettingsStore,
         randomDouble: @escaping () -> Double = { Double.random(in: 0..<1) },
-        randomInt: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) }
+        randomInt: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) },
+        timerScheduling: (any OneShotTimerScheduling)? = nil
     ) {
         self.quranRepository = quranRepository
         self.memorizationRepository = memorizationRepository
         self.settingsStore = settingsStore
         self.randomDouble = randomDouble
         self.randomInt = randomInt
+        self.timerScheduling = timerScheduling
     }
 
-    public func start(onVersesSelected: @escaping ([QuranAyah]) -> Void) {
-        guard timerSource == nil else { return }
+    /// Restored content can wait a full interval without selecting unseen verses.
+    @MainActor
+    public func start(selectImmediately: Bool = true, initialSettings: AppSettings? = nil,
+                      onVersesSelected: @escaping @MainActor ([QuranAyah]) -> Void) {
+        guard self.onVersesSelected == nil else { return }
         self.onVersesSelected = onVersesSelected
-        fireAndRearm()
+        let settings = initialSettings ?? settingsStore.settings
+        if selectImmediately { onVersesSelected(selectNextVerses(settings: settings)) }
+        guard self.onVersesSelected != nil else { return }
+        intervalCancellable = settingsStore.$settings
+            .map(\.displayInterval)
+            .dropFirst() // start can be called inside settings' willSet publication.
+            .prepend(settings.displayInterval)
+            .removeDuplicates()
+            .sink { [weak self] interval in self?.armNextTimer(interval: interval) }
     }
 
+    @MainActor
     public func stop() {
+        scheduleGeneration &+= 1
+        intervalCancellable = nil
         timerSource?.cancel()
         timerSource = nil
         onVersesSelected = nil
     }
 
-    private func fireAndRearm() {
-        onVersesSelected?(selectNextVerses())
-        armNextTimer()
-    }
-
-    private func armNextTimer() {
+    @MainActor
+    private func armNextTimer(interval: TimeInterval) {
         PerformanceSignposts.measure("VerseSchedulerRearm") {
-            let interval = max(1, settingsStore.settings.displayInterval)
-            let timer = DispatchSource.makeTimerSource(queue: .main)
-            timer.schedule(deadline: .now() + interval, leeway: .milliseconds(0))
-            timer.setEventHandler { [weak self] in self?.fireAndRearm() }
-            timer.resume()
-            timerSource = timer
+            scheduleGeneration &+= 1
+            let generation = scheduleGeneration
+            timerSource?.cancel()
+            timerSource = nil
+            guard onVersesSelected != nil else { return }
+            timerSource = (timerScheduling ?? DispatchOneShotTimer()).schedule(
+                after: max(1, interval), leeway: 0
+            ) { [weak self] in
+                guard let self, self.scheduleGeneration == generation,
+                      let callback = self.onVersesSelected else { return }
+                callback(self.selectNextVerses())
+                guard self.scheduleGeneration == generation else { return }
+                self.armNextTimer(interval: self.settingsStore.settings.displayInterval)
+            }
         }
     }
 
@@ -87,12 +109,16 @@ public final class VerseScheduler {
     /// clamped so a display never spills past the current surah (general
     /// pool) or the memorization set's own range.
     public func selectNextVerses() -> [QuranAyah] {
+        selectNextVerses(settings: settingsStore.settings)
+    }
+
+    private func selectNextVerses(settings: AppSettings) -> [QuranAyah] {
         PerformanceSignposts.measure("VerseSelection") {
-            let versesPerDisplay = max(1, settingsStore.settings.versesPerDisplay)
+            let versesPerDisplay = max(1, settings.versesPerDisplay)
             let enabledSets = memorizationRepository.fetchEnabled().filter { $0.ayahCount > 0 }
 
             if !enabledSets.isEmpty,
-               randomDouble() < Double(settingsStore.settings.memorizationWeightPercent) / 100 {
+               randomDouble() < Double(settings.memorizationWeightPercent) / 100 {
                 return selectFromMemorizationSets(enabledSets, versesPerDisplay: versesPerDisplay)
             }
             return selectFromGeneralPool(versesPerDisplay: versesPerDisplay)

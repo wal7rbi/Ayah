@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		003025A4BE039D8084BE34D0 /* NotchControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD58D17A813E41A0F0A509D /* NotchControllerTests.swift */; };
 		0731D02FE59F33D238DCE8DE /* uthmanic_hafs_v20.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 97CE3AD31A53B65BC8F46AD2 /* uthmanic_hafs_v20.ttf */; };
 		0DF1B0075B8F5FF404B3B7BF /* LayoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA90BFC52B3F5CA205FDE4F /* LayoutMetrics.swift */; };
 		1147415D8712AC55968883D9 /* cities_filtered.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = F5D596447417074595E65CD1 /* cities_filtered.sqlite */; };
@@ -30,7 +31,9 @@
 		81677FB67A275BC7371D01A2 /* NotchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45F4D23C30DF24E917974C9 /* NotchViewModel.swift */; };
 		88AF0B4D3A382E6DC6A9448A /* LaunchAtLoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064022577E18E5E026F8FD1B /* LaunchAtLoginViewModel.swift */; };
 		8D32CE0A2DF2F2783D7DA6E8 /* MemorizationSetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4F90D25B2E03E885AA831F /* MemorizationSetsView.swift */; };
+		95730C5AE8F6E9B09ACD5C75 /* CurrentLocationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A127F818F7658610D5704EAA /* CurrentLocationViewModelTests.swift */; };
 		9BC9667097AB6D17377D9BA9 /* NotchPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884E5B404FAD67AC70337B91 /* NotchPanel.swift */; };
+		9F89F7185A2E6C5851B77467 /* FloatingPopupAppearanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93318638859FEE5D491586B /* FloatingPopupAppearanceTests.swift */; };
 		A174C0DCEBCEEFB229E06725 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF67BF538C3506021516142 /* AboutWindowController.swift */; };
 		A5A0A713530CC060DC500496 /* GEONAMES_CHECKSUM in Resources */ = {isa = PBXBuildFile; fileRef = 8946D4130E84A4FBF29A07E4 /* GEONAMES_CHECKSUM */; };
 		B30CC881C44777557350875B /* AppLaunchGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */; };
@@ -38,6 +41,7 @@
 		D7097B106EC2EC5C13F595BA /* NotchDisplayContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9D150655D8E9093225677F /* NotchDisplayContent.swift */; };
 		E9E5D1D6C77ADDE1F0F6D09E /* AppPerformanceSignposts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925E846D7F1449DBF6E55472 /* AppPerformanceSignposts.swift */; };
 		ED588FA67B0392D9B0F77FC9 /* NotchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C30F43BEC99AFD9CC437579 /* NotchContentView.swift */; };
+		ED994A3BC7BFA8FEA5BE2272 /* DynamicNotchKit-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 84DA2DE8F0A28342BF56B53D /* DynamicNotchKit-LICENSE.txt */; };
 		F76AFEF410EB14542CF9FF9A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6122F45F4BFB78489EB301F6 /* Assets.xcassets */; };
 		FF9AB1A5CC213845C9D52425 /* Adhan-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = C46E1DD26C1242E272A211F8 /* Adhan-LICENSE.txt */; };
 /* End PBXBuildFile section */
@@ -59,6 +63,7 @@
 		19785C955C6C96C878C88725 /* CityPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityPickerView.swift; sourceTree = "<group>"; };
 		1BFC8A2B8BF0F51016B84650 /* NotchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchController.swift; sourceTree = "<group>"; };
 		2A9D150655D8E9093225677F /* NotchDisplayContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDisplayContent.swift; sourceTree = "<group>"; };
+		2CD58D17A813E41A0F0A509D /* NotchControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchControllerTests.swift; sourceTree = "<group>"; };
 		319612040E83816104527AAA /* Ayah.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ayah.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3292EF9A8BF28D56BD655BAA /* MemorizationSetsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorizationSetsWindowController.swift; sourceTree = "<group>"; };
 		38E824A0F46FC90293F329D2 /* ACKNOWLEDGEMENTS.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ACKNOWLEDGEMENTS.txt; sourceTree = "<group>"; };
@@ -69,6 +74,7 @@
 		67617C8E9CD8A284C853CF40 /* NotchViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchViewModelTests.swift; sourceTree = "<group>"; };
 		6D4F90D25B2E03E885AA831F /* MemorizationSetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorizationSetsView.swift; sourceTree = "<group>"; };
 		6EEFCEE357204FFE1D8C17BA /* AyahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahApp.swift; sourceTree = "<group>"; };
+		84DA2DE8F0A28342BF56B53D /* DynamicNotchKit-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "DynamicNotchKit-LICENSE.txt"; sourceTree = "<group>"; };
 		884E5B404FAD67AC70337B91 /* NotchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchPanel.swift; sourceTree = "<group>"; };
 		8946D4130E84A4FBF29A07E4 /* GEONAMES_CHECKSUM */ = {isa = PBXFileReference; path = GEONAMES_CHECKSUM; sourceTree = "<group>"; };
 		8C30F43BEC99AFD9CC437579 /* NotchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchContentView.swift; sourceTree = "<group>"; };
@@ -76,10 +82,12 @@
 		9226FE0B202387573E1E8102 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		925E846D7F1449DBF6E55472 /* AppPerformanceSignposts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPerformanceSignposts.swift; sourceTree = "<group>"; };
 		97CE3AD31A53B65BC8F46AD2 /* uthmanic_hafs_v20.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = uthmanic_hafs_v20.ttf; sourceTree = "<group>"; };
+		A127F818F7658610D5704EAA /* CurrentLocationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLocationViewModelTests.swift; sourceTree = "<group>"; };
 		A1E010835F9D5B0E30E89A67 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
 		B68F7A6678D904677982DF0D /* NotchShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchShape.swift; sourceTree = "<group>"; };
 		C020747C01E29A2A34756082 /* CityPickerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityPickerWindowController.swift; sourceTree = "<group>"; };
 		C46E1DD26C1242E272A211F8 /* Adhan-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Adhan-LICENSE.txt"; sourceTree = "<group>"; };
+		C93318638859FEE5D491586B /* FloatingPopupAppearanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPopupAppearanceTests.swift; sourceTree = "<group>"; };
 		CC06B06CFB4CAB084A7B7616 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		DCF67BF538C3506021516142 /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 		DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLaunchGuardTests.swift; sourceTree = "<group>"; };
@@ -169,6 +177,9 @@
 			isa = PBXGroup;
 			children = (
 				DF456AE5C91768D741CD162F /* AppLaunchGuardTests.swift */,
+				A127F818F7658610D5704EAA /* CurrentLocationViewModelTests.swift */,
+				C93318638859FEE5D491586B /* FloatingPopupAppearanceTests.swift */,
+				2CD58D17A813E41A0F0A509D /* NotchControllerTests.swift */,
 				67617C8E9CD8A284C853CF40 /* NotchViewModelTests.swift */,
 			);
 			path = App;
@@ -252,6 +263,7 @@
 			children = (
 				38E824A0F46FC90293F329D2 /* ACKNOWLEDGEMENTS.txt */,
 				C46E1DD26C1242E272A211F8 /* Adhan-LICENSE.txt */,
+				84DA2DE8F0A28342BF56B53D /* DynamicNotchKit-LICENSE.txt */,
 				00FEC0C81DF711C617446929 /* GeoNames-NOTICE.txt */,
 			);
 			path = ThirdParty;
@@ -376,6 +388,7 @@
 				FF9AB1A5CC213845C9D52425 /* Adhan-LICENSE.txt in Resources */,
 				F76AFEF410EB14542CF9FF9A /* Assets.xcassets in Resources */,
 				721E9D4B1737E13B647DB12A /* CHECKSUM in Resources */,
+				ED994A3BC7BFA8FEA5BE2272 /* DynamicNotchKit-LICENSE.txt in Resources */,
 				A5A0A713530CC060DC500496 /* GEONAMES_CHECKSUM in Resources */,
 				243B3194AA91832B27203EB8 /* GeoNames-NOTICE.txt in Resources */,
 				1147415D8712AC55968883D9 /* cities_filtered.sqlite in Resources */,
@@ -442,6 +455,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				B30CC881C44777557350875B /* AppLaunchGuardTests.swift in Sources */,
+				95730C5AE8F6E9B09ACD5C75 /* CurrentLocationViewModelTests.swift in Sources */,
+				9F89F7185A2E6C5851B77467 /* FloatingPopupAppearanceTests.swift in Sources */,
+				003025A4BE039D8084BE34D0 /* NotchControllerTests.swift in Sources */,
 				47005D3FE4BD86B7E599C39C /* NotchViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -451,7 +467,7 @@
 /* Begin PBXTargetDependency section */
 		D8C4E1F5AC4FE139BD231202 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = "TEMP_42D273BB-50A0-42AA-9150-EACE272F4CD2" /* AyahKit */;
+			productRef = "TEMP_17C7FC1C-59F8-4814-BDC5-3D54F6217228" /* AyahKit */;
 		};
 		DD4BAB965C363D5DC33E0CE6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -529,7 +545,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -538,7 +554,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
@@ -620,7 +636,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
@@ -629,7 +645,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ayah.app;
 				PRODUCT_NAME = Ayah;
 				SDKROOT = macosx;
@@ -719,7 +735,7 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AyahKit;
 		};
-		"TEMP_42D273BB-50A0-42AA-9150-EACE272F4CD2" /* AyahKit */ = {
+		"TEMP_17C7FC1C-59F8-4814-BDC5-3D54F6217228" /* AyahKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AyahKit;
 		};

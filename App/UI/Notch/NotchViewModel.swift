@@ -9,8 +9,8 @@ import SwiftUI
 /// `NotchDisplayContent`). Selection, weighting across memorization sets,
 /// and the self-rearming display timer all live in `VerseScheduler`;
 /// prayer-alert timing and ayah selection live in `PrayerAlertScheduler`.
-/// This view model hops each scheduler's callback back onto the main
-/// actor, republishes the result for `NotchContentView`, and starts/stops
+/// Scheduler callbacks arrive on the main actor. This view model publishes
+/// their result for `NotchContentView` and starts/stops
 /// `VerseScheduler` live as the Settings UI's "Show verses in notch"
 /// toggle (`AppSettings.isVerseDisplayEnabled`) changes.
 ///
@@ -33,7 +33,7 @@ final class NotchViewModel: ObservableObject {
     private let surahsByNumber: [Int: Surah]
     private var settingsCancellable: AnyCancellable?
     private var autoCollapseTask: Task<Void, Never>?
-    private var shouldSkipInitialScheduledVerses = false
+    private var shouldDeferInitialVerseSelection = false
     /// How long newly-due content stays expanded before the notch
     /// collapses itself again. An init parameter rather than a constant
     /// only so `AyahTests` can drive the auto-collapse path without
@@ -44,16 +44,6 @@ final class NotchViewModel: ObservableObject {
     private static let expandSpring = Animation.spring(response: 0.4, dampingFraction: 0.8)
     private static var motionAnimation: Animation? {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : expandSpring
-    }
-
-    /// How long the collapse animation needs before the card is really gone.
-    /// `NotchController`'s fallback bar waits this out before ordering its
-    /// panel off screen; `nil` under Reduce Motion, where `motionAnimation`
-    /// is `nil` and there is nothing to wait for. Lives here so "is there an
-    /// animation" and "how long is it" stay one fact, next to `expandSpring`
-    /// whose response it covers.
-    static var collapseAnimationDuration: Duration? {
-        motionAnimation == nil ? nil : .milliseconds(450)
     }
 
     init(
@@ -79,11 +69,8 @@ final class NotchViewModel: ObservableObject {
             quranRepository: quranRepository
         )
         self.content = restoredContent ?? .none
-        // `VerseScheduler.start` emits once immediately before arming its
-        // interval. Preserve a valid restored item through launch by
-        // ignoring only that first emission; the next scheduled deadline
-        // still records and displays new content normally.
-        self.shouldSkipInitialScheduledVerses = restoredContent != nil
+        // Keep restored content without selecting or advancing an unseen batch.
+        self.shouldDeferInitialVerseSelection = restoredContent != nil
     }
 
     /// Starts observing `isVerseDisplayEnabled` and applies its current
@@ -91,11 +78,11 @@ final class NotchViewModel: ObservableObject {
     /// calls at attach; subsequent toggles from the Settings UI flow
     /// through the same `sink`.
     func startDisplayTimer() {
+        guard settingsCancellable == nil else { return }
         settingsCancellable = settingsStore.$settings
-            .map(\.isVerseDisplayEnabled)
-            .removeDuplicates()
-            .sink { [weak self] enabled in
-                self?.setDisplayEnabled(enabled)
+            .removeDuplicates { $0.isVerseDisplayEnabled == $1.isVerseDisplayEnabled }
+            .sink { [weak self] settings in
+                self?.setDisplayEnabled(settings.isVerseDisplayEnabled, settings: settings)
             }
     }
 
@@ -106,16 +93,15 @@ final class NotchViewModel: ObservableObject {
     /// here and `isVerseDisplayEnabled` is what actually gates it.
     func startPrayerAlerts() {
         prayerAlertScheduler?.start { [weak self] display in
-            Task { @MainActor in
-                self?.showPrayerAlert(display)
-            }
+            self?.showPrayerAlert(display)
         }
     }
 
-    private func setDisplayEnabled(_ enabled: Bool) {
+    private func setDisplayEnabled(_ enabled: Bool, settings: AppSettings) {
         isDisplayEnabled = enabled
         guard enabled else {
             verseScheduler?.stop()
+            shouldDeferInitialVerseSelection = false
             // Leave an in-progress prayer alert alone if the verse toggle
             // happens to be flipped off mid-display.
             if case .verses = content {
@@ -125,19 +111,11 @@ final class NotchViewModel: ObservableObject {
             }
             return
         }
-        verseScheduler?.start { [weak self] ayahs in
-            Task { @MainActor in
-                self?.showScheduledVerses(ayahs)
-            }
+        let selectImmediately = !shouldDeferInitialVerseSelection
+        shouldDeferInitialVerseSelection = false
+        verseScheduler?.start(selectImmediately: selectImmediately, initialSettings: settings) { [weak self] ayahs in
+            self?.showVerses(ayahs)
         }
-    }
-
-    private func showScheduledVerses(_ ayahs: [QuranAyah]) {
-        if shouldSkipInitialScheduledVerses {
-            shouldSkipInitialScheduledVerses = false
-            return
-        }
-        showVerses(ayahs)
     }
 
     private func showVerses(_ ayahs: [QuranAyah]) {
