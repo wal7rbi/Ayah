@@ -45,7 +45,9 @@ final class NotchViewModelTests: XCTestCase {
             try? FileManager.default.removeItem(at: url)
         }
         temporaryDirectories.removeAll()
-        try await super.tearDown()
+        // XCTestCase's async base hook is empty. Calling it from this
+        // main-actor fixture sends non-Sendable XCTestCase across actors
+        // under Swift 6.1; XCTest still invokes its other teardown hooks.
     }
 
     // MARK: - Launch restoration
