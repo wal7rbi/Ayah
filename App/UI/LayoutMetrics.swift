@@ -36,6 +36,7 @@ enum PopoverMetrics {
 /// Floating presentation follows DynamicNotchKit's spacing and slide timing.
 /// Ayah uses an opaque black card and moves the card-sized window itself.
 enum FloatingPopupMetrics {
+    static let tabSize = CGSize(width: 64, height: 24)
     static let cornerRadius: CGFloat = 20
     static let topGap: CGFloat = 20
     static let animationDuration: TimeInterval = 0.4

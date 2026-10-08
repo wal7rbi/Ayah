@@ -178,6 +178,9 @@ awk -F, \
     -v cycles="$CYCLES" \
     -v delay="$DELAY_MS" '
     NR == 1 { next }
+    # A process may exit between kill -0 and ps. Keep raw evidence, but do
+    # not let a zombie/invalid zero-RSS row lower the settled-memory mean.
+    NF != 5 || $3 !~ /^[0-9]+$/ || $3 <= 0 { excluded++; next }
     {
         samples++
         phase[$2]++
@@ -192,8 +195,8 @@ awk -F, \
         growth = cooldown - baseline
         cycleCPU = phase["cycles"] ? cpuSum["cycles"] / phase["cycles"] : 0
         status = "Inconclusive"
-        interpretation = "Baseline or cooldown samples were missing."
-        if (baseline > 0 && cooldown > 0) {
+        interpretation = "Valid baseline, cycle, or cooldown samples were missing."
+        if (baseline > 0 && cooldown > 0 && phase["cycles"] > 0) {
             if (growth <= 5120) {
                 status = "Pass"
                 interpretation = "Settled RSS growth is within the provisional 5 MiB guardrail."
@@ -211,6 +214,7 @@ awk -F, \
         printf "- Cycles: %d\n", cycles >> report
         printf "- Delay after open/close: %d ms\n", delay >> report
         printf "- Samples: %d at approximately 250 ms intervals\n", samples >> report
+        printf "- Excluded invalid/post-exit samples: %d\n", excluded >> report
         printf "- Baseline mean RSS: %.2f MiB (%d samples)\n", baseline / 1024, phase["baseline"] >> report
         printf "- Cooldown mean RSS: %.2f MiB (%d samples)\n", cooldown / 1024, phase["cooldown"] >> report
         printf "- Settled RSS change: %+.2f MiB\n", growth / 1024 >> report

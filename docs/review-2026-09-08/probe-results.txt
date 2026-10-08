@@ -1,0 +1,28 @@
+[0/1] Planning build
+Building for debugging...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/6] Compiling AyahKitTests ReviewProbeTests.swift
+[4/6] Emitting module AyahKitTests
+[4/6] Write Objects.LinkFileList
+[5/6] Linking AyahKitPackageTests
+Build complete! (1.29s)
+Test Suite 'Selected tests' started at 2026-09-08 00:51:28.576.
+Test Suite 'AyahKitPackageTests.xctest' started at 2026-09-08 00:51:28.576.
+Test Suite 'ReviewProbeTests' started at 2026-09-08 00:51:28.576.
+Test Case '-[AyahKitTests.ReviewProbeTests testOldInvalidAccuracyLocationIsAccepted]' started.
+Test Case '-[AyahKitTests.ReviewProbeTests testOldInvalidAccuracyLocationIsAccepted]' passed (0.001 seconds).
+Test Case '-[AyahKitTests.ReviewProbeTests testPolarSummerHasNoPrayerEvents]' started.
+Test Case '-[AyahKitTests.ReviewProbeTests testPolarSummerHasNoPrayerEvents]' passed (0.001 seconds).
+Test Suite 'ReviewProbeTests' passed at 2026-09-08 00:51:28.579.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'AyahKitPackageTests.xctest' passed at 2026-09-08 00:51:28.579.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-09-08 00:51:28.579.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+REVIEW CONFIRMED: a 1970 location with negative horizontal accuracy is accepted
+REVIEW CONFIRMED: Tromso midsummer produces no prayer events
+􀟈  Test run started.
+􀄵  Testing Library Version: 1501
+􀄵  Target Platform: arm64e-apple-macos14.0
+􁁛  Test run with 0 tests in 0 suites passed after 0.001 seconds.

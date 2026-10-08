@@ -32,10 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let quranRepository = makeQuranRepository()
             let memorizationRepository = makeMemorizationRepository()
             let locationRepository = makeLocationRepository()
-            let verseScheduler = quranRepository.flatMap { qr in
-                memorizationRepository.map { mr in
-                    VerseScheduler(quranRepository: qr, memorizationRepository: mr, settingsStore: settingsStore)
-                }
+            // Memorization storage is optional: without it, verses still come from the whole Quran.
+            let verseScheduler = quranRepository.map { qr in
+                VerseScheduler(quranRepository: qr, memorizationRepository: memorizationRepository, settingsStore: settingsStore)
             }
 
             let prayerAlertScheduler = PrayerAlertScheduler(
@@ -176,8 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// effect on the next scheduled display with no extra plumbing.
     /// Unlike a Quran data integrity failure (§8), a failure here (e.g. a
     /// full disk) doesn't mean anything is untrusted, just that
-    /// memorization sets and the verse timer can't be persisted/run this
-    /// launch — surfaced as a non-critical alert rather than blocking
+    /// memorization sets can't be persisted this launch; verses keep
+    /// coming from the whole Quran — surfaced as a non-critical alert rather than blocking
     /// launch.
     private func makeMemorizationRepository() -> MemorizationRepository? {
         do {
@@ -189,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             presentErrorAlert(
                 title: "آية: بيانات الحفظ غير متوفرة",
-                message: "تعذر تحميل بيانات الحفظ، وسيتم تعطيل عرض الآيات في هذه الجلسة.\n\n\(error)",
+                message: "تعذر تحميل بيانات الحفظ، وستُعرض الآيات من القرآن كاملاً في هذه الجلسة.\n\n\(error)",
                 style: .warning
             )
             return nil

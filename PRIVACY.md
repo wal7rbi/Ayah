@@ -115,3 +115,20 @@ delivered.
 If anything in this document is unclear, or you find behavior that
 contradicts it, please open an issue — a privacy claim that doesn't match
 the code is a bug, not a matter of opinion.
+
+## Unreleased reliability update
+
+The local settings now also store the measured location timestamp and horizontal
+accuracy when available, separately from the time a request completed. Legacy
+locations retain unknown measurement metadata until explicitly refreshed. New
+Core Location results must be no more than five minutes old (with one minute of
+future-clock tolerance), have valid coordinates, and have horizontal accuracy
+between zero and 5,000 meters. These limits are application quality policy, not
+a guarantee of prayer-time accuracy. Saved locations are not refreshed in the
+background.
+
+If the top-level settings
+JSON cannot be decoded, one original recovery copy is kept under the local
+`com.ayah.appSettings.recovery` defaults key before subsequent edits replace the
+active settings. This copy can contain the same location preferences as the
+original settings and is never transmitted.

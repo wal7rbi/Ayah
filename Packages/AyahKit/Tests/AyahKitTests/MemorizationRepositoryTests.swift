@@ -11,6 +11,57 @@ final class MemorizationRepositoryTests: XCTestCase {
         return (repository, dbURL)
     }
 
+    func testDeleteAndUndoPreservesLatestProgressAndAllMetadata() throws {
+        let (repository, _) = try makeRepository()
+        var snapshot = try repository.create(surahNumber: 2, startAyah: 1, endAyah: 20)
+        snapshot.lastShownAt = Date(timeIntervalSince1970: 1_700_000_000)
+        snapshot.easeFactor = 2.5
+        snapshot.reviewIntervalDays = 4
+        snapshot.isEnabled = false
+        snapshot.repetitionMode = .random
+        try repository.update(snapshot)
+        try repository.updateCursor(id: snapshot.id, cursorAyah: 17)
+        let latest = try XCTUnwrap(repository.fetchAll().first)
+        let deleted = try repository.deleteReturningSet(id: snapshot.id)
+        XCTAssertEqual(deleted, latest)
+        XCTAssertTrue(repository.fetchAll().isEmpty)
+        try repository.restore(deleted)
+        XCTAssertEqual(repository.fetchAll(), [latest])
+    }
+
+    func testUndoCollisionDoesNotReplaceExistingProgress() throws {
+        let (repository, _) = try makeRepository()
+        let set = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        let deleted = try repository.deleteReturningSet(id: set.id)
+        try repository.restore(deleted)
+        try repository.updateCursor(id: set.id, cursorAyah: 6)
+        XCTAssertThrowsError(try repository.restore(deleted)) {
+            XCTAssertEqual($0 as? MemorizationRepositoryError, .alreadyExists)
+        }
+        XCTAssertEqual(repository.fetchAll().first?.cursorAyah, 6)
+    }
+
+    func testDeleteCorruptRowRollsBackAndMissingDeleteThrows() throws {
+        let (repository, url) = try makeRepository()
+        let set = try repository.create(surahNumber: 1, startAyah: 1, endAyah: 7)
+        let connection = try SQLiteConnection(path: url.path)
+        try connection.execute("UPDATE memorization_sets SET cursor_ayah = 99;")
+        XCTAssertThrowsError(try repository.deleteReturningSet(id: set.id))
+        // Repairing the row demonstrates it survived the failed deletion.
+        try connection.execute("UPDATE memorization_sets SET cursor_ayah = 3;")
+        XCTAssertEqual(repository.fetchAll().first?.cursorAyah, 3)
+        XCTAssertThrowsError(try repository.deleteReturningSet(id: "missing")) {
+            XCTAssertEqual($0 as? MemorizationRepositoryError, .notFound)
+        }
+    }
+
+    func testRestoreRejectsInvalidMetadataBeforeInsertion() throws {
+        let (repository, _) = try makeRepository()
+        let set = MemorizationSet(surahNumber: 1, startAyah: 1, endAyah: 7, cursorAyah: Int.max)
+        XCTAssertThrowsError(try repository.restore(set))
+        XCTAssertTrue(repository.fetchAll().isEmpty)
+    }
+
     func testCreateRejectsInvalidRange() throws {
         let (repository, _) = try makeRepository()
         XCTAssertThrowsError(try repository.create(surahNumber: 1, startAyah: 5, endAyah: 2)) { error in

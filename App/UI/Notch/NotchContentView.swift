@@ -17,7 +17,9 @@ import SwiftUI
 /// shapes.
 struct NotchContentView: View {
     @ObservedObject var viewModel: NotchViewModel
-    let isPhysicalNotch: Bool
+    let mode: NotchPresentationMode
+
+    private var isPhysicalNotch: Bool { mode == .physicalNotch }
 
     private static let arabicFontName = "kfgqpchafsuthmanicscript-Reg"
 
@@ -26,20 +28,24 @@ struct NotchContentView: View {
         return shape
             .fill(.black)
             .frame(
-                width: !isPhysicalNotch || viewModel.isExpanded ? NotchMetrics.expandedSize.width : viewModel.collapsedSize.width,
-                height: !isPhysicalNotch || viewModel.isExpanded ? NotchMetrics.expandedSize.height : viewModel.collapsedSize.height
+                width: mode == .floatingCard ? NotchMetrics.expandedSize.width : nil,
+                height: mode == .floatingCard ? NotchMetrics.expandedSize.height : nil
             )
             .overlay {
-                if !isPhysicalNotch {
+                if mode == .floatingCard {
                     // The complete card remains mounted through its window's closing slide.
                     cardContent
                 } else if viewModel.isExpanded {
-                    cardContent.transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
+                    cardContent
+                } else if mode == .floatingTab {
+                    Text("آية")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white)
+                        .environment(\.layoutDirection, .rightToLeft)
                 }
             }
             .clipShape(shape)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .contentShape(Rectangle())
+            .contentShape(shape)
             .onTapGesture {
                 viewModel.toggleExpanded()
             }
@@ -59,7 +65,7 @@ struct NotchContentView: View {
         let bottomRadius: CGFloat = viewModel.isExpanded ? 26 : 10
         guard isPhysicalNotch else {
             return AnyShape(
-                RoundedRectangle(cornerRadius: FloatingPopupMetrics.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: mode == .floatingTab && !viewModel.isExpanded ? 8 : FloatingPopupMetrics.cornerRadius, style: .continuous)
             )
         }
         return AnyShape(Self.notchShape(topRadius: topRadius, bottomRadius: bottomRadius))

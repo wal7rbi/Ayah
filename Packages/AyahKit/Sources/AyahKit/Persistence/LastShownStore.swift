@@ -90,8 +90,8 @@ public enum LastShownStoreError: Error, Equatable, Sendable {
 public final class LastShownStore: ObservableObject {
     @Published public private(set) var record: LastShownRecord?
 
-    public private(set) var lastLoadError: Error?
-    public private(set) var lastSaveError: Error?
+    @Published public private(set) var lastLoadError: Error?
+    @Published public private(set) var lastSaveError: Error?
 
     private let defaults: UserDefaults
     private static let storageKey = "com.ayah.lastShown"

@@ -8,6 +8,8 @@ public enum LocationProviderError: Error, Sendable, Equatable {
     case requestCancelled
     case requestTimedOut
     case invalidCoordinates
+    case staleMeasurement
+    case inaccurateMeasurement
 }
 
 /// The slice of `CLLocationManager` `CurrentLocationProvider` actually
@@ -44,34 +46,67 @@ extension CLLocationManager: CLLocationManagerProviding {}
 /// distinction is real and must stay disclosed in the UI that calls this,
 /// not silently glossed over as "fully offline" the way the bundled
 /// GeoNames city picker is.
+/// Metadata is optional only for legacy coordinate-only providers. Core Location
+/// always returns its original measurement time and horizontal accuracy.
+public struct LocationFix: Sendable, Equatable {
+    public let coordinates: Coordinates
+    public let measuredAt: Date?
+    public let horizontalAccuracy: Double?
+
+    public init(coordinates: Coordinates, measuredAt: Date? = nil, horizontalAccuracy: Double? = nil) {
+        self.coordinates = coordinates
+        self.measuredAt = measuredAt
+        self.horizontalAccuracy = horizontalAccuracy
+    }
+}
+
 @MainActor
 public protocol LocationProviding: AnyObject {
     func requestOneShotLocation() async throws -> Coordinates
+    func requestOneShotLocationFix() async throws -> LocationFix
+}
+
+public extension LocationProviding {
+    func requestOneShotLocationFix() async throws -> LocationFix {
+        LocationFix(coordinates: try await requestOneShotLocation())
+    }
 }
 
 @MainActor
 public final class CurrentLocationProvider: NSObject, LocationProviding {
     private let manager: CLLocationManagerProviding
+    private let now: () -> Date
     private let timeoutNanoseconds: UInt64
-    private var continuation: CheckedContinuation<Coordinates, Error>?
+    /// A person reading the permission dialog needs longer than a GPS fix does.
+    private let authorizationTimeoutNanoseconds: UInt64
+    private var continuation: CheckedContinuation<LocationFix, Error>?
     private var timeoutTask: Task<Void, Never>?
     private var isRequestingLocation = false
 
     public override init() {
+        now = Date.init
         manager = CLLocationManager()
         timeoutNanoseconds = 30_000_000_000
+        authorizationTimeoutNanoseconds = 120_000_000_000
         super.init()
         manager.delegate = self
     }
 
-    init(manager: CLLocationManagerProviding, timeoutNanoseconds: UInt64 = 30_000_000_000) {
+    init(manager: CLLocationManagerProviding, timeoutNanoseconds: UInt64 = 30_000_000_000,
+         authorizationTimeoutNanoseconds: UInt64 = 120_000_000_000, now: @escaping () -> Date = Date.init) {
+        self.now = now
         self.manager = manager
         self.timeoutNanoseconds = timeoutNanoseconds
+        self.authorizationTimeoutNanoseconds = authorizationTimeoutNanoseconds
         super.init()
         manager.delegate = self
     }
 
     public func requestOneShotLocation() async throws -> Coordinates {
+        try await requestOneShotLocationFix().coordinates
+    }
+
+    public func requestOneShotLocationFix() async throws -> LocationFix {
         guard continuation == nil else {
             throw LocationProviderError.requestAlreadyInProgress
         }
@@ -84,6 +119,7 @@ public final class CurrentLocationProvider: NSObject, LocationProviding {
                 }
                 switch manager.authorizationStatus {
                 case .notDetermined:
+                    startTimeout(authorizationTimeoutNanoseconds)
                     manager.requestWhenInUseAuthorization()
                 case .denied, .restricted:
                     finish(.failure(LocationProviderError.authorizationDenied))
@@ -103,17 +139,22 @@ public final class CurrentLocationProvider: NSObject, LocationProviding {
     private func beginLocationRequestIfPending() {
         guard continuation != nil, !isRequestingLocation else { return }
         isRequestingLocation = true
+        startTimeout(timeoutNanoseconds)
         manager.requestLocation()
+    }
+
+    /// Replaces any running timeout, so granting permission restarts the clock for the fix.
+    private func startTimeout(_ nanoseconds: UInt64) {
         timeoutTask?.cancel()
         timeoutTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+            try? await Task.sleep(nanoseconds: nanoseconds)
             guard !Task.isCancelled else { return }
             finish(.failure(LocationProviderError.requestTimedOut))
         }
     }
 
-    private func finish(_ result: Result<Coordinates, Error>) {
+    private func finish(_ result: Result<LocationFix, Error>) {
         guard let continuation else { return }
         self.continuation = nil
         isRequestingLocation = false
@@ -145,7 +186,15 @@ extension CurrentLocationProvider: @preconcurrency CLLocationManagerDelegate {
     }
 
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last, let continuation else { return }
+        guard continuation != nil, !locations.isEmpty else { return }
+        let referenceNow = now()
+        let location = locations.sorted { $0.timestamp > $1.timestamp }.first { location in
+            let age = referenceNow.timeIntervalSince(location.timestamp)
+            return age >= -60 && age <= 300
+                && location.horizontalAccuracy.isFinite
+                && (0...5000).contains(location.horizontalAccuracy)
+                && CLLocationCoordinate2DIsValid(location.coordinate)
+        } ?? locations[locations.count - 1]
         let latitude = location.coordinate.latitude
         let longitude = location.coordinate.longitude
         guard latitude.isFinite, longitude.isFinite,
@@ -153,8 +202,20 @@ extension CurrentLocationProvider: @preconcurrency CLLocationManagerDelegate {
             finish(.failure(LocationProviderError.invalidCoordinates))
             return
         }
-        _ = continuation // Documents that unsolicited updates are ignored.
-        finish(.success(Coordinates(latitude: latitude, longitude: longitude)))
+        let age = referenceNow.timeIntervalSince(location.timestamp)
+        guard age.isFinite, age >= -60, age <= 300 else {
+            finish(.failure(LocationProviderError.staleMeasurement))
+            return
+        }
+        guard location.horizontalAccuracy.isFinite,
+              (0...5000).contains(location.horizontalAccuracy) else {
+            finish(.failure(LocationProviderError.inaccurateMeasurement))
+            return
+        }
+        finish(.success(LocationFix(
+            coordinates: Coordinates(latitude: latitude, longitude: longitude),
+            measuredAt: location.timestamp, horizontalAccuracy: location.horizontalAccuracy
+        )))
     }
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

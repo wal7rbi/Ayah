@@ -253,6 +253,9 @@ struct PopoverContentView: View {
             Text("عام")
                 .font(.headline)
 
+            Toggle("الفتح عند تمرير المؤشر", isOn: $settingsStore.settings.openOnHover)
+            Toggle("إظهار زر آية أعلى الشاشات بدون نتوء", isOn: $settingsStore.settings.showFloatingTab)
+
             Toggle("بدء التشغيل مع تسجيل الدخول", isOn: launchAtLoginBinding)
 
             if case .requiresApproval = launchAtLoginViewModel.status {
