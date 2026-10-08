@@ -20,7 +20,7 @@ import Foundation
 /// selection remains available independently for repository-level use.
 public final class VerseScheduler {
     private let quranRepository: QuranRepository
-    private let memorizationRepository: MemorizationRepository
+    private let memorizationAccess: MemorizationAccess
     private let settingsStore: SettingsStore
     private let randomDouble: () -> Double
     private let randomInt: (ClosedRange<Int>) -> Int
@@ -42,14 +42,15 @@ public final class VerseScheduler {
 
     public init(
         quranRepository: QuranRepository,
-        memorizationRepository: MemorizationRepository,
+        memorizationRepository: MemorizationRepository?,
+        memorizationAccess: MemorizationAccess? = nil,
         settingsStore: SettingsStore,
         randomDouble: @escaping () -> Double = { Double.random(in: 0..<1) },
         randomInt: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) },
         timerScheduling: (any OneShotTimerScheduling)? = nil
     ) {
         self.quranRepository = quranRepository
-        self.memorizationRepository = memorizationRepository
+        self.memorizationAccess = memorizationAccess ?? MemorizationAccess(repository: memorizationRepository)
         self.settingsStore = settingsStore
         self.randomDouble = randomDouble
         self.randomInt = randomInt
@@ -115,7 +116,7 @@ public final class VerseScheduler {
     private func selectNextVerses(settings: AppSettings) -> [QuranAyah] {
         PerformanceSignposts.measure("VerseSelection") {
             let versesPerDisplay = max(1, settings.versesPerDisplay)
-            let enabledSets = memorizationRepository.fetchEnabled().filter { $0.ayahCount > 0 }
+            let enabledSets = memorizationAccess.fetchEnabled().filter { $0.ayahCount > 0 }
 
             if !enabledSets.isEmpty,
                randomDouble() < Double(settings.memorizationWeightPercent) / 100 {
@@ -150,7 +151,7 @@ public final class VerseScheduler {
         if set.repetitionMode == .sequential, !ayahs.isEmpty {
             let nextCursor = ayahNumber > set.endAyah ? set.startAyah : ayahNumber
             do {
-                try memorizationRepository.updateCursor(id: set.id, cursorAyah: nextCursor)
+                try memorizationAccess.updateCursor(id: set.id, cursorAyah: nextCursor)
                 lastCursorUpdateError = nil
             } catch {
                 lastCursorUpdateError = error

@@ -16,6 +16,8 @@ final class SettingsStoreTests: XCTestCase {
     func testDefaultsAppliedWhenNothingStored() throws {
         let store = SettingsStore(defaults: try makeIsolatedDefaults())
         XCTAssertEqual(store.settings, AppSettings())
+        XCTAssertTrue(store.settings.openOnHover)
+        XCTAssertTrue(store.settings.showFloatingTab)
     }
 
     func testChangesArePersistedAcrossStoreInstances() throws {
@@ -23,10 +25,46 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: defaults)
         store.settings.versesPerDisplay = 4
         store.settings.memorizationWeightPercent = 30
+        store.settings.openOnHover = false
+        store.settings.showFloatingTab = false
 
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.settings.versesPerDisplay, 4)
         XCTAssertEqual(reloaded.settings.memorizationWeightPercent, 30)
+        XCTAssertFalse(reloaded.settings.openOnHover)
+        XCTAssertFalse(reloaded.settings.showFloatingTab)
+    }
+
+    func testHoverSettingsMigrateIndependentlyWithoutResettingExistingPreferences() throws {
+        let defaults = try makeIsolatedDefaults()
+        let json = """
+        {"isVerseDisplayEnabled": false, "displayInterval": 3600,
+         "versesPerDisplay": 4, "selectedCityID": 12345,
+         "arePrayerNotificationsEnabled": true}
+        """
+        defaults.set(Data(json.utf8), forKey: Self.storageKey)
+
+        let settings = SettingsStore(defaults: defaults).settings
+        XCTAssertTrue(settings.openOnHover)
+        XCTAssertTrue(settings.showFloatingTab)
+        XCTAssertFalse(settings.isVerseDisplayEnabled)
+        XCTAssertEqual(settings.displayInterval, 3600)
+        XCTAssertEqual(settings.versesPerDisplay, 4)
+        XCTAssertEqual(settings.selectedCityID, 12345)
+        XCTAssertTrue(settings.arePrayerNotificationsEnabled)
+    }
+
+    func testMalformedHoverSettingDoesNotResetTheOtherSetting() throws {
+        for (json, expectedHover, expectedTab) in [
+            (#"{"openOnHover": "invalid", "showFloatingTab": false}"#, true, false),
+            (#"{"openOnHover": false, "showFloatingTab": "invalid"}"#, false, true)
+        ] {
+            let defaults = try makeIsolatedDefaults()
+            defaults.set(Data(json.utf8), forKey: Self.storageKey)
+            let settings = SettingsStore(defaults: defaults).settings
+            XCTAssertEqual(settings.openOnHover, expectedHover)
+            XCTAssertEqual(settings.showFloatingTab, expectedTab)
+        }
     }
 
     /// Regression test for a real bug hit mid-development: changing

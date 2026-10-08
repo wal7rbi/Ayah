@@ -218,4 +218,94 @@ final class CurrentLocationProviderTests: XCTestCase {
         )
         _ = try await retry.value
     }
+    func testMeasurementMetadataIsPreserved() async throws {
+        let measuredAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let provider = CurrentLocationProvider(manager: FakeLocationManager(), now: { measuredAt.addingTimeInterval(20) })
+        let request = Task { try await provider.requestOneShotLocationFix() }
+        await Task.yield()
+        provider.locationManager(CLLocationManager(), didUpdateLocations: [
+            CLLocation(coordinate: CLLocationCoordinate2D(latitude: 24, longitude: 46), altitude: 0,
+                       horizontalAccuracy: 120, verticalAccuracy: -1, timestamp: measuredAt)
+        ])
+        let fix = try await request.value
+        XCTAssertEqual(fix.measuredAt, measuredAt)
+        XCTAssertEqual(fix.horizontalAccuracy, 120)
+    }
+
+    func testOldFutureAndInaccurateFixesAreRejected() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for (age, accuracy, expected) in [
+            (301.0, 100.0, LocationProviderError.staleMeasurement),
+            (-61.0, 100.0, .staleMeasurement),
+            (0.0, -1.0, .inaccurateMeasurement),
+            (0.0, 5001.0, .inaccurateMeasurement)
+        ] {
+            let provider = CurrentLocationProvider(manager: FakeLocationManager(), now: { now })
+            let request = Task { try await provider.requestOneShotLocationFix() }
+            await Task.yield()
+            provider.locationManager(CLLocationManager(), didUpdateLocations: [
+                CLLocation(coordinate: CLLocationCoordinate2D(latitude: 24, longitude: 46), altitude: 0,
+                           horizontalAccuracy: accuracy, verticalAccuracy: -1,
+                           timestamp: now.addingTimeInterval(-age))
+            ])
+            do {
+                _ = try await request.value
+                XCTFail("unusable fix must not be accepted")
+            } catch {
+                XCTAssertEqual(error as? LocationProviderError, expected)
+            }
+        }
+    }
+
+    func testWaitingForPermissionAlsoTimesOut() async {
+        let manager = FakeLocationManager()
+        manager.authorizationStatus = .notDetermined
+        let provider = CurrentLocationProvider(manager: manager, authorizationTimeoutNanoseconds: 10_000_000)
+        do {
+            _ = try await provider.requestOneShotLocationFix()
+            XCTFail("permission request must be bounded")
+        } catch {
+            XCTAssertEqual(error as? LocationProviderError, .requestTimedOut)
+        }
+        XCTAssertEqual(manager.requestLocationCallCount, 0)
+    }
+
+    /// The short fix timeout must not cut off someone still reading the
+    /// permission dialog, and must start fresh once permission is granted.
+    func testPermissionWaitUsesItsOwnTimeoutThenFixTimeoutStartsFresh() async throws {
+        let manager = FakeLocationManager()
+        manager.authorizationStatus = .notDetermined
+        let provider = CurrentLocationProvider(manager: manager, timeoutNanoseconds: 20_000_000,
+                                               authorizationTimeoutNanoseconds: 60_000_000_000)
+        var result: Result<LocationFix, Error>?
+        let request = Task { @MainActor in
+            do { result = .success(try await provider.requestOneShotLocationFix()) } catch { result = .failure(error) }
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertNil(result, "still waiting on the permission dialog after the fix timeout elapsed")
+
+        manager.authorizationStatus = .authorizedAlways
+        provider.locationManagerDidChangeAuthorization(CLLocationManager())
+        XCTAssertEqual(manager.requestLocationCallCount, 1)
+        await request.value
+        guard case .failure(let error)? = result else { return XCTFail("expected the fix to time out") }
+        XCTAssertEqual(error as? LocationProviderError, .requestTimedOut)
+    }
+
+    func testBatchUsesFreshValidMeasurementInsteadOfLastStaleFix() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let provider = CurrentLocationProvider(manager: FakeLocationManager(), now: { now })
+        let request = Task { try await provider.requestOneShotLocationFix() }
+        await Task.yield()
+        let fresh = CLLocation(coordinate: CLLocationCoordinate2D(latitude: 24, longitude: 46), altitude: 0,
+                               horizontalAccuracy: 25, verticalAccuracy: -1, timestamp: now)
+        let stale = CLLocation(coordinate: CLLocationCoordinate2D(latitude: 21, longitude: 39), altitude: 0,
+                               horizontalAccuracy: 25, verticalAccuracy: -1,
+                               timestamp: now.addingTimeInterval(-600))
+        provider.locationManager(CLLocationManager(), didUpdateLocations: [fresh, stale])
+        let fix = try await request.value
+        XCTAssertEqual(fix.coordinates.latitude, 24)
+        XCTAssertEqual(fix.measuredAt, now)
+    }
+
 }

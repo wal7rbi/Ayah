@@ -94,10 +94,10 @@ public final class LocationRepository {
     /// `name`/`country_code`/`timezone` are expected non-null for every
     /// bundled row, but `sqlite3_column_text` returns a null pointer for a
     /// NULL column regardless of the data's expected shape —
-    /// `String(cString:)` traps on that. This data has no checksum guard
-    /// the way `quran.sqlite` does, so a corrupted bundle must fail this
-    /// load (surfaced by `AppDelegate` as a non-critical "city data
-    /// unavailable" alert) rather than crash the app.
+    /// `String(cString:)` traps on that. Even after the bundle checksum
+    /// check, an invalid row must fail this load (surfaced by `AppDelegate`
+    /// as a non-critical "city data unavailable" alert) rather than crash
+    /// the app.
     private static func requiredText(_ stmt: OpaquePointer?, _ index: Int32) throws -> String {
         guard sqlite3_column_type(stmt, index) == SQLITE_TEXT,
               let text = sqlite3_column_text(stmt, index)

@@ -12,6 +12,7 @@ public enum MemorizationRepositoryError: Error, Equatable, Sendable {
     /// its own schema constraints.
     case corruptedRow
     case notFound
+    case alreadyExists
 }
 
 /// CRUD over `memorization_sets` in the local `ayah_user.sqlite` (see
@@ -199,20 +200,7 @@ public final class MemorizationRepository {
     }
 
     public func update(_ set: MemorizationSet) throws {
-        try Self.validate(surahNumber: set.surahNumber, startAyah: set.startAyah, endAyah: set.endAyah)
-        if let cursorAyah = set.cursorAyah {
-            guard set.startAyah...set.endAyah ~= cursorAyah,
-                  Int32(exactly: cursorAyah) != nil else {
-                throw MemorizationRepositoryError.valueOutOfRange
-            }
-        }
-        if let reviewIntervalDays = set.reviewIntervalDays,
-           (reviewIntervalDays < 0 || Int32(exactly: reviewIntervalDays) == nil) {
-            throw MemorizationRepositoryError.valueOutOfRange
-        }
-        if let easeFactor = set.easeFactor, !easeFactor.isFinite || easeFactor <= 0 {
-            throw MemorizationRepositoryError.valueOutOfRange
-        }
+        try Self.validate(set)
         try connection.run(
             """
             UPDATE memorization_sets SET
@@ -232,6 +220,68 @@ public final class MemorizationRepository {
             Self.bindOptionalDouble(stmt, 8, set.easeFactor)
             Self.bindOptionalInt(stmt, 9, set.reviewIntervalDays)
             sqlite3_bind_text(stmt, 10, set.id, -1, Self.transient)
+        }
+    }
+
+    /// No UI calls this yet: delete-with-undo was rolled back. Kept, with its
+    /// tests, for when it returns.
+    /// Captures the current persisted progress, never the list's stale snapshot.
+    /// The transaction also rolls back deletion if a corrupt row cannot be decoded.
+    public func deleteReturningSet(id: String) throws -> MemorizationSet {
+        try connection.execute("BEGIN IMMEDIATE TRANSACTION;")
+        do {
+            let rows = try connection.query(
+                "DELETE FROM memorization_sets WHERE id = ? RETURNING \(Self.columns);",
+                bind: { sqlite3_bind_text($0, 1, id, -1, Self.transient) },
+                map: Self.rowToSet
+            )
+            guard let deleted = rows.first else { throw MemorizationRepositoryError.notFound }
+            try connection.execute("COMMIT;")
+            return deleted
+        } catch {
+            try? connection.execute("ROLLBACK;")
+            throw error
+        }
+    }
+
+    /// Undo for `deleteReturningSet`; likewise unused by the UI for now.
+    /// Restores identity, progress and review metadata without replacing an existing row.
+    public func restore(_ set: MemorizationSet) throws {
+        try Self.validate(set)
+        try connection.execute("BEGIN IMMEDIATE TRANSACTION;")
+        do {
+            let matches = try connection.query(
+                "SELECT id FROM memorization_sets WHERE id = ?;",
+                bind: { sqlite3_bind_text($0, 1, set.id, -1, Self.transient) },
+                map: { _ in true }
+            )
+            guard matches.isEmpty else { throw MemorizationRepositoryError.alreadyExists }
+            try insert(set)
+            try connection.execute("COMMIT;")
+        } catch {
+            try? connection.execute("ROLLBACK;")
+            throw error
+        }
+    }
+
+    private static func validate(_ set: MemorizationSet) throws {
+        guard !set.id.isEmpty, set.createdAt.timeIntervalSince1970.isFinite,
+              set.lastShownAt?.timeIntervalSince1970.isFinite != false else {
+            throw MemorizationRepositoryError.valueOutOfRange
+        }
+        try Self.validate(surahNumber: set.surahNumber, startAyah: set.startAyah, endAyah: set.endAyah)
+        if let cursorAyah = set.cursorAyah {
+            guard set.startAyah...set.endAyah ~= cursorAyah,
+                  Int32(exactly: cursorAyah) != nil else {
+                throw MemorizationRepositoryError.valueOutOfRange
+            }
+        }
+        if let reviewIntervalDays = set.reviewIntervalDays,
+           (reviewIntervalDays < 0 || Int32(exactly: reviewIntervalDays) == nil) {
+            throw MemorizationRepositoryError.valueOutOfRange
+        }
+        if let easeFactor = set.easeFactor, !easeFactor.isFinite || easeFactor <= 0 {
+            throw MemorizationRepositoryError.valueOutOfRange
         }
     }
 

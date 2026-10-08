@@ -32,7 +32,16 @@ final class NotchViewModel: ObservableObject {
     private let quranRepository: QuranRepository?
     private let surahsByNumber: [Int: Surah]
     private var settingsCancellable: AnyCancellable?
-    private var autoCollapseTask: Task<Void, Never>?
+    @Published private(set) var showFloatingTab: Bool
+    private var hoverEnabled: Bool
+    private var hoverSettingsCancellable: AnyCancellable?
+    private let interactionTimer: any OneShotTimerScheduling
+    private var autoCollapseTask: (any OneShotTimerToken)?
+    private var hoverTask: (any OneShotTimerToken)?
+    private var autoGeneration = 0
+    private var hoverGeneration = 0
+    private var pointerInside = false
+    private var suppressHoverUntilExit = false
     private var shouldDeferInitialVerseSelection = false
     /// How long newly-due content stays expanded before the notch
     /// collapses itself again. An init parameter rather than a constant
@@ -52,9 +61,13 @@ final class NotchViewModel: ObservableObject {
         prayerAlertScheduler: PrayerAlertScheduler?,
         settingsStore: SettingsStore,
         lastShownStore: LastShownStore,
-        autoCollapseDelay: Duration = .seconds(12)
+        autoCollapseDelay: Duration = .seconds(12),
+        interactionTimer: (any OneShotTimerScheduling)? = nil
     ) {
         self.autoCollapseDelay = autoCollapseDelay
+        self.interactionTimer = interactionTimer ?? NotchInteractionTimer()
+        self.hoverEnabled = settingsStore.settings.openOnHover
+        self.showFloatingTab = settingsStore.settings.showFloatingTab
         self.verseScheduler = verseScheduler
         self.prayerAlertScheduler = prayerAlertScheduler
         self.settingsStore = settingsStore
@@ -79,6 +92,17 @@ final class NotchViewModel: ObservableObject {
     /// through the same `sink`.
     func startDisplayTimer() {
         guard settingsCancellable == nil else { return }
+        hoverSettingsCancellable = settingsStore.$settings
+            .sink { [weak self] settings in
+                guard let self else { return }
+                if self.hoverEnabled != settings.openOnHover {
+                    self.hoverEnabled = settings.openOnHover
+                    self.resetPointerInteraction()
+                }
+                if self.showFloatingTab != settings.showFloatingTab {
+                    self.showFloatingTab = settings.showFloatingTab
+                }
+            }
         settingsCancellable = settingsStore.$settings
             .removeDuplicates { $0.isVerseDisplayEnabled == $1.isVerseDisplayEnabled }
             .sink { [weak self] settings in
@@ -106,6 +130,7 @@ final class NotchViewModel: ObservableObject {
             // happens to be flipped off mid-display.
             if case .verses = content {
                 cancelAutoCollapse()
+                cancelHover()
                 content = .none
                 withAnimation(Self.motionAnimation) { isExpanded = false }
             }
@@ -155,36 +180,102 @@ final class NotchViewModel: ObservableObject {
 
     private func expandAndAutoCollapse() {
         cancelAutoCollapse()
+        cancelHover()
         withAnimation(Self.motionAnimation) { isExpanded = true }
-        let delay = autoCollapseDelay
-        autoCollapseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            self?.autoCollapseTask = nil
-            withAnimation(Self.motionAnimation) { self?.isExpanded = false }
+        let generation = autoGeneration
+        let components = autoCollapseDelay.components
+        let delay = Double(components.seconds) + Double(components.attoseconds) / 1e18
+        autoCollapseTask = interactionTimer.schedule(after: delay, leeway: 0) { [weak self] in
+            guard let self, self.autoGeneration == generation else { return }
+            self.autoCollapseTask?.cancel()
+            self.autoCollapseTask = nil
+            if !self.pointerInside || !self.hoverEnabled { self.collapse() }
         }
     }
 
-    /// Routes manual taps through here rather than letting the view mutate
-    /// `isExpanded` directly, because the two directions are not symmetric.
-    /// A tap that *expands* arms a whole fresh delay: it must not inherit
-    /// whatever is left of a pending one and get yanked shut mid-read, and
-    /// it must not arm nothing at all — on a physical notch the collapsed
-    /// pill is always on screen, so tapping it is the ordinary way to
-    /// re-read the last card, and leaving that with no timer stranded the
-    /// card on screen indefinitely. A tap that *collapses* cancels the
-    /// pending task outright, since there is nothing left to dismiss.
+    func pointerChanged(_ inside: Bool) {
+        guard pointerInside != inside else { return }
+        pointerInside = inside
+        cancelHover()
+        if !inside { suppressHoverUntilExit = false }
+        guard hoverEnabled else { return }
+        if inside {
+            // Nothing to reveal yet: hovering must not open an empty, spinning card.
+            guard !isExpanded, !suppressHoverUntilExit, content != .none else { return }
+            let generation = hoverGeneration
+            hoverTask = interactionTimer.schedule(after: 0.3, leeway: 0) { [weak self] in
+                guard let self, self.hoverGeneration == generation,
+                      self.pointerInside, self.hoverEnabled, !self.suppressHoverUntilExit,
+                      self.content != .none else { return }
+                self.cancelHover()
+                withAnimation(Self.motionAnimation) { self.isExpanded = true }
+            }
+        } else if isExpanded && autoCollapseTask == nil {
+            let generation = hoverGeneration
+            hoverTask = interactionTimer.schedule(after: 0.15, leeway: 0) { [weak self] in
+                guard let self, self.hoverGeneration == generation,
+                      !self.pointerInside, self.autoCollapseTask == nil else { return }
+                self.cancelHover()
+                self.collapse()
+            }
+        }
+    }
+
+    /// A retired presentation cannot retain pointer ownership of the new one.
+    func resetPointerInteraction() {
+        let hadHoverInteraction = pointerInside || hoverTask != nil
+        cancelHover()
+        pointerInside = false
+        suppressHoverUntilExit = false
+        if hadHoverInteraction && autoCollapseTask == nil { collapse() }
+    }
+
     func toggleExpanded() {
         guard isExpanded else {
             expandAndAutoCollapse()
             return
         }
         cancelAutoCollapse()
+        cancelHover()
+        suppressHoverUntilExit = pointerInside
+        collapse()
+    }
+
+    private func collapse() {
         withAnimation(Self.motionAnimation) { isExpanded = false }
     }
 
+    private func cancelHover() {
+        hoverGeneration += 1
+        hoverTask?.cancel()
+        hoverTask = nil
+    }
+
     private func cancelAutoCollapse() {
+        autoGeneration += 1
         autoCollapseTask?.cancel()
         autoCollapseTask = nil
+    }
+}
+
+/// One-shot tasks only; no idle polling. The scheduling boundary is shared
+/// with AyahKit so interaction races can be exercised without real sleeps.
+@MainActor
+private final class NotchInteractionTimer: OneShotTimerScheduling {
+    private final class Token: OneShotTimerToken {
+        var task: Task<Void, Never>?
+        func cancel() { task?.cancel() }
+        deinit { task?.cancel() }
+    }
+
+    func schedule(after interval: TimeInterval, leeway: TimeInterval,
+                  action: @escaping @MainActor () -> Void) -> any OneShotTimerToken {
+        let token = Token()
+        token.task = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+            action()
+        }
+        return token
     }
 }

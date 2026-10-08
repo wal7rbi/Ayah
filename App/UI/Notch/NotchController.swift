@@ -2,6 +2,10 @@ import AppKit
 import AyahKit
 import Combine
 
+enum NotchPresentationMode {
+    case physicalNotch, floatingTab, floatingCard
+}
+
 /// A value snapshot permits display transitions to be tested without creating NSScreens.
 struct NotchScreen {
     let frame: CGRect
@@ -26,9 +30,11 @@ final class NotchController {
     private let viewModel: NotchViewModel
     private let prayerAlertScheduler: PrayerAlertScheduler?
     private let screens: () -> [NotchScreen]
-    private let makePanel: (NotchViewModel, Bool) -> any NotchPanelPresenting
+    private let makePanel: (NotchViewModel, NotchPresentationMode) -> any NotchPanelPresenting
     private let reduceMotion: () -> Bool
-    private var isPhysicalNotch: Bool?
+    private var mode: NotchPresentationMode?
+    private var collapsedFrame = CGRect.zero
+    private var tabCancellable: AnyCancellable?
     private var targetFrame = CGRect.zero
     private var hiddenFrame = CGRect.zero
     private var visibilityCancellable: AnyCancellable?
@@ -62,8 +68,8 @@ final class NotchController {
                 NotchScreen(frame: $0.frame, visibleFrame: $0.visibleFrame, notchFrame: NotchController.notchFrame(on: $0))
             }
         },
-        makePanel: @escaping (NotchViewModel, Bool) -> any NotchPanelPresenting = {
-            NotchPanel(contentRect: .zero, viewModel: $0, isPhysicalNotch: $1)
+        makePanel: @escaping (NotchViewModel, NotchPresentationMode) -> any NotchPanelPresenting = {
+            NotchPanel(contentRect: .zero, viewModel: $0, mode: $1)
         },
         reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     ) {
@@ -86,6 +92,9 @@ final class NotchController {
         visibilityCancellable = viewModel.$isExpanded.removeDuplicates().sink { [weak self] expanded in
             self?.setVisible(expanded, animated: true)
         }
+        tabCancellable = viewModel.$showFloatingTab.removeDuplicates().dropFirst().sink { [weak self] enabled in
+            self?.refreshPresentation(showFloatingTab: enabled)
+        }
         viewModel.startDisplayTimer()
         viewModel.startPrayerAlerts()
         NotificationCenter.default.addObserver(
@@ -99,47 +108,63 @@ final class NotchController {
 
     /// Replacing only the panel keeps a display transition from selecting verses,
     /// advancing memorization, or creating a second scheduler subscription.
-    func refreshPresentation() {
+    func refreshPresentation(showFloatingTab: Bool? = nil) {
         AppPerformanceSignposts.measure("NotchPresentation") {
+            viewModel.resetPointerInteraction()
             presentationGeneration &+= 1
             let available = screens()
             guard let screen = available.first(where: { $0.notchFrame != nil }) ?? available.first else {
                 panel?.hide()
                 panel = nil
-                isPhysicalNotch = nil
+                mode = nil
                 return
             }
-            let physical = screen.notchFrame != nil
-            let replacing = panel == nil || physical != isPhysicalNotch
+            let nextMode: NotchPresentationMode = screen.notchFrame != nil ? .physicalNotch
+                : (showFloatingTab ?? viewModel.showFloatingTab) ? .floatingTab : .floatingCard
+            let replacing = panel == nil || nextMode != mode
             if replacing {
                 panel?.hide()
-                panel = makePanel(viewModel, physical)
-                isPhysicalNotch = physical
+                panel = makePanel(viewModel, nextMode)
+                mode = nextMode
             }
             let size = NotchMetrics.expandedSize
             if let notch = screen.notchFrame {
                 viewModel.collapsedSize = notch.size
                 targetFrame = CGRect(x: notch.midX - size.width / 2,
                                      y: screen.frame.maxY - size.height, width: size.width, height: size.height)
-                panel?.place(at: targetFrame)
-                panel?.show()
+                collapsedFrame = notch
+                setVisible(viewModel.isExpanded, animated: false)
             } else {
-                viewModel.collapsedSize = size
+                viewModel.collapsedSize = nextMode == .floatingTab ? FloatingPopupMetrics.tabSize : size
                 targetFrame = CGRect(x: screen.frame.midX - size.width / 2,
                                      y: screen.visibleFrame.maxY - FloatingPopupMetrics.topGap - size.height,
                                      width: size.width, height: size.height)
                 hiddenFrame = CGRect(x: targetFrame.minX, y: screen.frame.maxY,
                                      width: size.width, height: size.height)
-                if replacing { panel?.place(at: hiddenFrame) }
+                let tabSize = FloatingPopupMetrics.tabSize
+                collapsedFrame = CGRect(x: targetFrame.midX - tabSize.width / 2,
+                                        y: targetFrame.maxY - tabSize.height,
+                                        width: tabSize.width, height: tabSize.height)
+                if replacing { panel?.place(at: nextMode == .floatingTab ? collapsedFrame : hiddenFrame) }
                 setVisible(viewModel.isExpanded, animated: replacing)
             }
         }
     }
 
     private func setVisible(_ visible: Bool, animated: Bool) {
-        guard isPhysicalNotch == false, let panel else { return }
+        guard let mode, let panel else { return }
         presentationGeneration &+= 1
         let generation = presentationGeneration
+        if mode != .floatingCard {
+            let frame = visible ? targetFrame : collapsedFrame
+            if animated && !reduceMotion() && panel.isVisible {
+                panel.animate(to: frame, opening: visible, completion: {})
+            } else {
+                panel.place(at: frame)
+            }
+            panel.show()
+            return
+        }
         if visible {
             if !panel.isVisible {
                 panel.place(at: reduceMotion() ? targetFrame : hiddenFrame)
@@ -162,7 +187,10 @@ final class NotchController {
     }
 
     @objc private func screenParametersChanged() { refreshPresentation() }
-    @objc private func systemDidWake() { prayerAlertScheduler?.rearm() }
+    @objc private func systemDidWake() {
+        refreshPresentation()
+        prayerAlertScheduler?.rearm()
+    }
 
     static func notchFrame(on screen: NSScreen) -> CGRect? {
         guard screen.safeAreaInsets.top > 0,

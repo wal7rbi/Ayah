@@ -96,8 +96,8 @@ menu bar, with `collectionBehavior` including `.canJoinAllSpaces` and
 apps.
 
 Expand/collapse is driven by discrete state changes — a verse becoming
-due, or a user click. Physical-notch geometry uses SwiftUI spring animations;
-the floating card uses a bounded AppKit window-frame animation. There is never a continuous per-frame animation
+due, a user click, or pointer entry/exit. Panel geometry uses bounded AppKit
+window-frame animations. There is never a continuous per-frame animation
 loop. This is the single biggest lever on the idle-CPU target: web-shell
 based notch apps have been observed sitting at 10–15% CPU continuously,
 purely from render loops, versus roughly 0.1–1% for a SwiftUI
@@ -133,16 +133,28 @@ including clamshell and external-display transitions, while preserving
 active content and the running schedulers.
 
 On a physical notch, the black panel expands from the cutout and retains
-its collapsed silhouette. On a non-notch display, it is a solid-black
-floating card, rounded on all four corners, centered below the menu bar
-with a 20-point gap. The complete card and text slide down on opening and
-up on dismissal, using a 0.4-second window animation with a slight opening
-overshoot, following DynamicNotchKit's non-notch presentation. Reduce Motion
-shows and hides the card immediately. The fallback panel stays visible until dismissal animation
-finishes and is then hidden entirely; it does not leave an idle pill or
-an invisible click-blocking region. A newer popup cancels an older pending
-dismissal. Both modes retain verse replay and automatic dismissal without
-stealing keyboard focus.
+its collapsed silhouette. On a non-notch display, a 64 × 24-point “آية” tab
+is centered below the menu bar with a 20-point gap. It grows into the
+480 × 220-point rounded black card with a fixed top edge. Both persistent
+modes resize the actual window, avoiding a card-sized invisible input area.
+The independent `showFloatingTab` setting defaults to true. With it disabled,
+the complete card and text slide down on opening and up on dismissal, then
+the panel orders out; its content remains mounted throughout that slide.
+Reduce Motion bypasses window travel. All presentations remain nonactivating.
+
+`openOnHover` also defaults to true. AppKit tracking areas remain active while
+another app owns focus. Entry arms a cancellable 300 ms opening; exit arms a
+150 ms close for hover-opened content. Re-entry cancels that close. Manual
+closure suppresses reopening until a real exit/re-entry. Hover reveals current
+content without selecting verses or writing last-shown records, and does
+nothing while there is no content yet, rather than opening an empty card.
+
+Scheduled content and manual replay/open retain a fresh 12-second minimum
+display period. Hover holds the card open past that deadline; exit afterward
+closes it. New content cancels a pending hover close. Timer generations reject
+obsolete callbacks, and presentation generations prevent an old dismissal from
+hiding a reopened or replacement panel. Display changes and wake clear pointer
+ownership while preserving active timed displays and scheduler subscriptions.
 
 ## 5. Quran text source & licensing
 

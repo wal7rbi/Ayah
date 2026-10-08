@@ -137,7 +137,18 @@ public final class PrayerAlertScheduler {
             )
         ).sorted { $0.fireDate < $1.fireDate }
 
-        guard let next = events.first else { return }
+        guard let next = events.first else {
+            // Polar dates can have no calculable prayers. Keep one bounded,
+            // local-calendar retry so seasonal recovery needs no app restart.
+            let nextDay = tomorrowCalendar.startOfDay(for: tomorrow)
+            timerSource = timerScheduling.schedule(
+                after: max(1, nextDay.timeIntervalSince(referenceNow)), leeway: 5
+            ) { [weak self] in
+                guard let self, self.scheduleGeneration == generation else { return }
+                self.armNextTimer()
+            }
+            return
+        }
 
         timerSource = timerScheduling.schedule(
             after: max(1, next.fireDate.timeIntervalSince(referenceNow)), leeway: 5

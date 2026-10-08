@@ -13,7 +13,13 @@ public enum PrayerLocationSource: String, Codable, Sendable {
 /// Theme settings still belong to their own later build stage (see
 /// ARCHITECTURE.md phased build order) and are not anticipated here.
 public struct AppSettings: Codable, Equatable, Sendable {
+    public var currentLocationMeasuredAt: Date?
+    public var currentLocationHorizontalAccuracy: Double?
     public var isVerseDisplayEnabled: Bool
+    /// Reveal existing content when the pointer rests on the notch or Ayah tab.
+    public var openOnHover: Bool
+    /// Keep a visible entry point below the menu bar on displays without a notch.
+    public var showFloatingTab: Bool
     /// Seconds between verse displays.
     public var displayInterval: TimeInterval
     /// "Verses per display" (ARCHITECTURE.md's "Verses per display"
@@ -78,7 +84,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var prayerNotificationReminderMinutes: Int
 
     public init(
+        currentLocationMeasuredAt: Date? = nil,
+        currentLocationHorizontalAccuracy: Double? = nil,
         isVerseDisplayEnabled: Bool = true,
+        openOnHover: Bool = true,
+        showFloatingTab: Bool = true,
         displayInterval: TimeInterval = 900,
         versesPerDisplay: Int = 2,
         memorizationWeightPercent: Int = 70,
@@ -92,7 +102,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
         arePrayerNotificationsEnabled: Bool = false,
         prayerNotificationReminderMinutes: Int = 5
     ) {
+        self.currentLocationMeasuredAt = currentLocationMeasuredAt
+        self.currentLocationHorizontalAccuracy = currentLocationHorizontalAccuracy
         self.isVerseDisplayEnabled = isVerseDisplayEnabled
+        self.openOnHover = openOnHover
+        self.showFloatingTab = showFloatingTab
         self.displayInterval = displayInterval
         self.versesPerDisplay = versesPerDisplay
         self.memorizationWeightPercent = memorizationWeightPercent
@@ -130,7 +144,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
             (try? container.decodeIfPresent(T.self, forKey: key)) ?? defaultValue
         }
 
+        currentLocationMeasuredAt = decode(.currentLocationMeasuredAt, default: nil)
+        let accuracy: Double? = decode(.currentLocationHorizontalAccuracy, default: nil)
+        currentLocationHorizontalAccuracy = accuracy.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
         isVerseDisplayEnabled = decode(.isVerseDisplayEnabled, default: true)
+        openOnHover = decode(.openOnHover, default: true)
+        showFloatingTab = decode(.showFloatingTab, default: true)
         let decodedInterval: TimeInterval = decode(.displayInterval, default: 900)
         displayInterval = decodedInterval.isFinite && (60...86_400).contains(decodedInterval) ? decodedInterval : 900
         let decodedVerses: Int = decode(.versesPerDisplay, default: 2)

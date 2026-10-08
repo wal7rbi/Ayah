@@ -32,6 +32,7 @@ final class NotchControllerTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = SettingsStore(defaults: defaults)
         settings.settings.isVerseDisplayEnabled = false
+        settings.settings.showFloatingTab = false
         let lastShown = LastShownStore(defaults: defaults)
         lastShown.save(.prayerAlert(LastShownPrayerAlertRecord(prayerKey: "fajr", fireDate: Date(),
                                                             reminderOffsetMinutes: 0, ayahID: nil, shownAt: Date())))
@@ -44,18 +45,18 @@ final class NotchControllerTests: XCTestCase {
         try withViewModel { model in
             var screens = [builtIn, external]
             var panels: [Panel] = []
-            var modes: [Bool] = []
+            var modes: [NotchPresentationMode] = []
             let controller = NotchController(viewModel: model, screens: { screens }, makePanel: { _, physical in
                 let panel = Panel(); panels.append(panel); modes.append(physical); return panel
             }, reduceMotion: { true })
             controller.attachToNotchIfAvailable()
-            XCTAssertEqual(modes, [true])
+            XCTAssertEqual(modes, [.physicalNotch])
             XCTAssertTrue(panels[0].isVisible)
             let content = model.content
             model.isExpanded = true
             screens = [external]
             controller.refreshPresentation()
-            XCTAssertEqual(modes, [true, false])
+            XCTAssertEqual(modes, [.physicalNotch, .floatingCard])
             XCTAssertFalse(panels[0].isVisible)
             XCTAssertTrue(panels[1].isVisible)
             XCTAssertEqual(panels[1].frame.maxY, external.visibleFrame.maxY - 20)
@@ -67,7 +68,7 @@ final class NotchControllerTests: XCTestCase {
             XCTAssertEqual(panels.count, 2)
             screens = [builtIn, external]
             controller.refreshPresentation()
-            XCTAssertEqual(modes, [true, false, true])
+            XCTAssertEqual(modes, [.physicalNotch, .floatingCard, .physicalNotch])
             XCTAssertFalse(panels[1].isVisible)
             XCTAssertTrue(panels[2].isVisible)
         }
@@ -134,4 +135,55 @@ final class NotchControllerTests: XCTestCase {
             XCTAssertTrue(panel.animations.isEmpty)
         }
     }
+    func testFloatingTabUsesSmallWindowAndKeepsTopAnchor() throws {
+        let name = "com.ayah.tab-tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = SettingsStore(defaults: defaults)
+        settings.settings.isVerseDisplayEnabled = false
+        let model = NotchViewModel(quranRepository: nil, verseScheduler: nil, prayerAlertScheduler: nil,
+                                   settingsStore: settings, lastShownStore: LastShownStore(defaults: defaults))
+        var panels: [Panel] = []
+        var modes: [NotchPresentationMode] = []
+        let controller = NotchController(viewModel: model, screens: { [self.external] }, makePanel: { _, mode in
+            let panel = Panel(); panels.append(panel); modes.append(mode); return panel
+        }, reduceMotion: { true })
+        controller.attachToNotchIfAvailable()
+        let tab = try XCTUnwrap(panels.first)
+        XCTAssertEqual(modes, [.floatingTab])
+        XCTAssertTrue(tab.isVisible)
+        XCTAssertEqual(tab.frame.size, FloatingPopupMetrics.tabSize)
+        let top = tab.frame.maxY
+        let center = tab.frame.midX
+        model.toggleExpanded()
+        XCTAssertEqual(tab.frame.size, NotchMetrics.expandedSize)
+        XCTAssertEqual(tab.frame.maxY, top)
+        XCTAssertEqual(tab.frame.midX, center)
+        settings.settings.showFloatingTab = false
+        XCTAssertEqual(modes, [.floatingTab, .floatingCard])
+        XCTAssertFalse(tab.isVisible)
+        XCTAssertTrue(panels[1].isVisible, "Changing mode preserves a manual display deadline")
+        model.toggleExpanded()
+        XCTAssertFalse(panels[1].isVisible)
+        settings.settings.showFloatingTab = true
+        XCTAssertEqual(modes.last, .floatingTab)
+        XCTAssertEqual(panels.last?.frame.size, FloatingPopupMetrics.tabSize)
+        XCTAssertEqual(panels.last?.isVisible, true)
+    }
+
+    func testPhysicalNotchWindowShrinksToCameraBounds() throws {
+        try withViewModel { model in
+            let panel = Panel()
+            let controller = NotchController(viewModel: model, screens: { [self.builtIn] },
+                                              makePanel: { _, _ in panel }, reduceMotion: { true })
+            controller.attachToNotchIfAvailable()
+            XCTAssertEqual(panel.frame, builtIn.notchFrame)
+            model.toggleExpanded()
+            XCTAssertEqual(panel.frame.size, NotchMetrics.expandedSize)
+            XCTAssertEqual(panel.frame.maxY, builtIn.frame.maxY)
+            model.toggleExpanded()
+            XCTAssertEqual(panel.frame, builtIn.notchFrame)
+        }
+    }
+
 }

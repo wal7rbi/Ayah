@@ -261,14 +261,203 @@ final class NotchViewModelTests: XCTestCase {
         XCTAssertEqual(store.record?.shownAt, shownAt, "Replay is not a new display and must not restamp the record.")
     }
 
+    // MARK: - Hover interaction
+
+    func testLeavingBeforeHoverDelayCancelsOpeningEvenIfCancelledCallbackFires() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.pointerChanged(true)
+        let opening = try XCTUnwrap(timer.tokens.last)
+        XCTAssertEqual(opening.interval, 0.3)
+        viewModel.pointerChanged(false)
+        XCTAssertTrue(opening.isCancelled)
+        opening.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testHoverOpensExistingContentAndReentryCancelsDelayedClose() throws {
+        let timer = ManualInteractionTimer()
+        let store = try prayerAlertStore()
+        let originalRecord = store.record
+        let viewModel = try makeViewModel(lastShownStore: store, interactionTimer: timer)
+        let originalContent = viewModel.content
+        viewModel.pointerChanged(true)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        XCTAssertEqual(viewModel.content, originalContent)
+        XCTAssertEqual(store.record, originalRecord)
+
+        viewModel.pointerChanged(false)
+        let closing = try XCTUnwrap(timer.tokens.last)
+        XCTAssertEqual(closing.interval, 0.15)
+        viewModel.pointerChanged(true)
+        XCTAssertTrue(closing.isCancelled)
+        closing.fire()
+        XCTAssertTrue(viewModel.isExpanded)
+
+        viewModel.pointerChanged(false)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertFalse(viewModel.isExpanded)
+        XCTAssertEqual(viewModel.content, originalContent)
+        XCTAssertEqual(store.record, originalRecord)
+    }
+
+    func testLeavingTimedDisplayPreservesTwelveSecondDeadline() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.replayLastShown()
+        let deadline = try XCTUnwrap(timer.tokens.last)
+        XCTAssertEqual(deadline.interval, 12)
+        viewModel.pointerChanged(true)
+        viewModel.pointerChanged(false)
+        XCTAssertEqual(timer.tokens.count, 1, "Leaving early must not arm a short hover close.")
+        XCTAssertFalse(deadline.isCancelled)
+        XCTAssertTrue(viewModel.isExpanded)
+        deadline.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testHoveredDisplayRemainsOpenAfterDeadlineUntilPointerLeaves() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.replayLastShown()
+        viewModel.pointerChanged(true)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        viewModel.pointerChanged(false)
+        let closing = try XCTUnwrap(timer.tokens.last)
+        XCTAssertEqual(closing.interval, 0.15)
+        closing.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testReplayInvalidatesPendingHoverCloseAndOldDisplayDeadline() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.pointerChanged(true)
+        try XCTUnwrap(timer.tokens.last).fire()
+        viewModel.pointerChanged(false)
+        let closing = try XCTUnwrap(timer.tokens.last)
+        viewModel.replayLastShown()
+        let oldDeadline = try XCTUnwrap(timer.tokens.last)
+        XCTAssertTrue(closing.isCancelled)
+        closing.fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        viewModel.replayLastShown()
+        XCTAssertTrue(oldDeadline.isCancelled)
+        oldDeadline.fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testClickCloseSuppressesHoverUntilPointerExitsAndEntersAgain() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.pointerChanged(true)
+        let opening = try XCTUnwrap(timer.tokens.last)
+        opening.fire()
+        viewModel.toggleExpanded()
+        viewModel.pointerChanged(true)
+        opening.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+        XCTAssertEqual(timer.tokens.count, 1)
+        viewModel.pointerChanged(false)
+        viewModel.pointerChanged(true)
+        XCTAssertEqual(timer.tokens.count, 2)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertTrue(viewModel.isExpanded)
+    }
+
+    func testHoverDoesNotOpenWhenThereIsNoContent() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: LastShownStore(defaults: isolatedDefaults()), interactionTimer: timer)
+        XCTAssertEqual(viewModel.content, .none)
+        viewModel.pointerChanged(true)
+        timer.tokens.last?.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testDisablingHoverCancelsPendingOpenAndAllowsFreshInteractionWhenEnabled() throws {
+        let timer = ManualInteractionTimer()
+        let settings = SettingsStore(defaults: try isolatedDefaults())
+        let viewModel = try makeViewModel(settingsStore: settings, lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.startDisplayTimer()
+        viewModel.pointerChanged(true)
+        let opening = try XCTUnwrap(timer.tokens.last)
+        settings.settings.openOnHover = false
+        XCTAssertTrue(opening.isCancelled)
+        opening.fire()
+        viewModel.pointerChanged(true)
+        XCTAssertFalse(viewModel.isExpanded)
+        XCTAssertEqual(timer.tokens.count, 1)
+        settings.settings.openOnHover = true
+        viewModel.pointerChanged(true)
+        try XCTUnwrap(timer.tokens.last).fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        settings.settings.openOnHover = false
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
+    func testPointerResetInvalidatesCallbacksAndPreservesTimedDisplay() throws {
+        let timer = ManualInteractionTimer()
+        let viewModel = try makeViewModel(lastShownStore: prayerAlertStore(), interactionTimer: timer)
+        viewModel.pointerChanged(true)
+        let opening = try XCTUnwrap(timer.tokens.last)
+        viewModel.resetPointerInteraction()
+        opening.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+        viewModel.pointerChanged(true)
+        try XCTUnwrap(timer.tokens.last).fire()
+        viewModel.pointerChanged(false)
+        let closing = try XCTUnwrap(timer.tokens.last)
+        viewModel.resetPointerInteraction()
+        viewModel.replayLastShown()
+        let deadline = try XCTUnwrap(timer.tokens.last)
+        viewModel.pointerChanged(true)
+        viewModel.resetPointerInteraction()
+        closing.fire()
+        XCTAssertTrue(viewModel.isExpanded)
+        XCTAssertFalse(deadline.isCancelled)
+        deadline.fire()
+        XCTAssertFalse(viewModel.isExpanded)
+    }
+
     // MARK: - Fixtures
+
+    private final class ManualInteractionTimer: OneShotTimerScheduling {
+        final class Token: OneShotTimerToken {
+            let interval: TimeInterval
+            let action: @MainActor () -> Void
+            private(set) var isCancelled = false
+
+            init(interval: TimeInterval, action: @escaping @MainActor () -> Void) {
+                self.interval = interval
+                self.action = action
+            }
+
+            func cancel() { isCancelled = true }
+            // Intentionally allow cancelled delivery to exercise generation guards.
+            func fire() { action() }
+        }
+
+        var tokens: [Token] = []
+
+        func schedule(after interval: TimeInterval, leeway: TimeInterval,
+                      action: @escaping @MainActor () -> Void) -> any OneShotTimerToken {
+            let token = Token(interval: interval, action: action)
+            tokens.append(token)
+            return token
+        }
+    }
 
     private func makeViewModel(
         quranRepository: QuranRepository? = nil,
         verseScheduler: VerseScheduler? = nil,
         settingsStore: SettingsStore? = nil,
         lastShownStore: LastShownStore,
-        autoCollapseDelay: Duration = .seconds(12)
+        autoCollapseDelay: Duration = .seconds(12),
+        interactionTimer: (any OneShotTimerScheduling)? = nil
     ) throws -> NotchViewModel {
         NotchViewModel(
             quranRepository: quranRepository,
@@ -279,7 +468,8 @@ final class NotchViewModelTests: XCTestCase {
             // theirs to write to.
             settingsStore: try settingsStore ?? SettingsStore(defaults: isolatedDefaults()),
             lastShownStore: lastShownStore,
-            autoCollapseDelay: autoCollapseDelay
+            autoCollapseDelay: autoCollapseDelay,
+            interactionTimer: interactionTimer
         )
     }
 

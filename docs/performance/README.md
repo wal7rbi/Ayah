@@ -96,7 +96,7 @@ Do not infer energy or accessibility quality from a Time Profiler trace. VoiceOv
 
 Keep reviewed summaries under `docs/performance/`. Keep raw `.trace` bundles, their generated `*-toc.xml` exports, and verbose logs outside source control, preferably beneath `/private/tmp`. A summary must link or name its raw artifact directory, but should also state when that directory is ephemeral or was removed.
 
-The initial release-candidate template is [2026-08-23-release-candidate-baseline-v1.md](2026-08-23-release-candidate-baseline-v1.md).
+The current recorded validation is [2026-09-08-reliability-validation.md](2026-09-08-reliability-validation.md), including the environment, observed resource measurements, and remaining manual checks.
 
 ## One-command release-candidate run
 

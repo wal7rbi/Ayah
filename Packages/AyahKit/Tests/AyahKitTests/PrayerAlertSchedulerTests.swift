@@ -244,6 +244,36 @@ final class PrayerAlertSchedulerTests: XCTestCase {
         XCTAssertEqual(timer.entries.count, 2)
     }
 
+    @MainActor
+    func testUnavailablePolarPrayersRetryAtNextLocalMidnightWithoutShowingAlert() throws {
+        let store = SettingsStore(defaults: try isolatedDefaults())
+        store.settings = AppSettings(
+            prayerLocationSource: .currentLocation,
+            currentLocationCoordinates: Coordinates(latitude: 89, longitude: 20),
+            currentLocationTimeZoneIdentifier: "Europe/Oslo",
+            arePrayerNotificationsEnabled: true
+        )
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Oslo"))
+        var current = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 6, day: 15, hour: 12)))
+        let nextDay = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: current)))
+        let timer = ManualOneShotTimer()
+        let scheduler = PrayerAlertScheduler(quranRepository: nil, locationRepository: nil,
+            settingsStore: store, now: { current }, timerScheduling: timer)
+        var alertCount = 0
+        scheduler.start { _ in alertCount += 1 }
+        let retry = try XCTUnwrap(timer.entries.last)
+        XCTAssertEqual(retry.interval, nextDay.timeIntervalSince(current), accuracy: 0.01)
+        current = nextDay
+        retry.fire()
+        XCTAssertEqual(timer.entries.count, 2)
+        XCTAssertEqual(alertCount, 0)
+        let nextRetry = try XCTUnwrap(timer.entries.last)
+        scheduler.stop()
+        nextRetry.fire()
+        XCTAssertEqual(timer.entries.count, 2)
+    }
+
     private func isolatedDefaults() throws -> UserDefaults {
         try XCTUnwrap(UserDefaults(suiteName: "com.ayah.scheduler-tests.\(UUID().uuidString)"))
     }

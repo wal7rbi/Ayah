@@ -23,13 +23,16 @@ final class CurrentLocationViewModel: ObservableObject {
     }
 
     func fetchCurrentLocation() async {
+        guard !isFetching else { return }
         errorMessage = nil
         isFetching = true
         defer { isFetching = false }
         do {
-            let coordinates = try await provider.requestOneShotLocation()
+            let fix = try await provider.requestOneShotLocationFix()
             var settings = settingsStore.settings
-            settings.currentLocationCoordinates = coordinates
+            settings.currentLocationCoordinates = fix.coordinates
+            settings.currentLocationMeasuredAt = fix.measuredAt
+            settings.currentLocationHorizontalAccuracy = fix.horizontalAccuracy
             settings.currentLocationTimeZoneIdentifier = TimeZone.current.identifier
             settings.currentLocationFetchedAt = Date()
             settings.prayerLocationSource = .currentLocation
