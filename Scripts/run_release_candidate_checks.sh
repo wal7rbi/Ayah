@@ -172,7 +172,7 @@ RELEASE_DERIVED=$OUTPUT_DIR/DerivedData-Release
 APP_TESTS_DERIVED=$OUTPUT_DIR/DerivedData-AppTests
 
 # The AyahTests bundle is app-hosted, so it needs a full Xcode build rather
-# than `swift test`, and its own derived data: PRODUCT_NAME is deliberately
+# than `swift test`, and its own derived data: AYAH_PRODUCT_NAME is deliberately
 # not overridden here the way it is for the builds below, because TEST_HOST
 # resolves through the real Ayah.app path.
 run_logged 'App test suite' app-tests.log \
@@ -198,7 +198,7 @@ run_logged 'Debug application build' xcodebuild-debug.log \
         -disableAutomaticPackageResolution \
         -onlyUsePackageVersionsFromResolvedFile \
         -skipPackageUpdates \
-        PRODUCT_NAME="$PRODUCT_NAME" \
+        AYAH_PRODUCT_NAME="$PRODUCT_NAME" \
         PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER" \
         ARCHS=arm64 \
         ONLY_ACTIVE_ARCH=NO \
@@ -216,7 +216,7 @@ run_logged 'Release application build' xcodebuild-release.log \
         -disableAutomaticPackageResolution \
         -onlyUsePackageVersionsFromResolvedFile \
         -skipPackageUpdates \
-        PRODUCT_NAME="$PRODUCT_NAME" \
+        AYAH_PRODUCT_NAME="$PRODUCT_NAME" \
         PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER" \
         build || true
 

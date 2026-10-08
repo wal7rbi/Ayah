@@ -102,7 +102,7 @@ if ! xcodebuild \
     -disableAutomaticPackageResolution \
     -onlyUsePackageVersionsFromResolvedFile \
     -skipPackageUpdates \
-    PRODUCT_NAME="$PRODUCT_NAME" \
+    AYAH_PRODUCT_NAME="$PRODUCT_NAME" \
     PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER" \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) AYAH_PERFORMANCE_AUTOMATION' \
     build > "$BUILD_LOG" 2>&1; then
