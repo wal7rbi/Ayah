@@ -17,7 +17,7 @@ Required:
 
 Stable mode:
   --publication-approved    Record the operator's authorization to publish.
-                             Requires a clean tree at annotated tag v1.0.4.
+                             Requires a clean tree at annotated tag v1.0.5.
                              Unverified manual checks remain MANUAL in the report.
   --manual-qa-approved      Legacy alias for --publication-approved. It does
                              not assert that unrecorded manual tests passed.
@@ -71,8 +71,8 @@ for COMMAND in awk basename bash codesign cmp date ditto find git grep hdiutil l
     command -v "$COMMAND" >/dev/null 2>&1 || fail "required command not found: $COMMAND"
 done
 
-EXPECTED_VERSION=1.0.4
-EXPECTED_BUILD=5
+EXPECTED_VERSION=1.0.5
+EXPECTED_BUILD=6
 EXPECTED_TAG=v$EXPECTED_VERSION
 REVISION=$(git -C "$REPO_ROOT" rev-parse HEAD) || fail "could not resolve HEAD"
 WORKTREE_STATUS=$(git -C "$REPO_ROOT" status --porcelain)

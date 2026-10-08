@@ -255,7 +255,7 @@ run_launch_trace() {
         -disableAutomaticPackageResolution \
         -onlyUsePackageVersionsFromResolvedFile \
         -skipPackageUpdates \
-        PRODUCT_NAME="$PROFILE_PRODUCT_NAME" \
+        AYAH_PRODUCT_NAME="$PROFILE_PRODUCT_NAME" \
         PRODUCT_BUNDLE_IDENTIFIER="$PROFILE_BUNDLE_IDENTIFIER" \
         build > "$BUILD_LOG" 2>&1; then
         fail "Xcode build failed; see $BUILD_LOG. Confirm the pinned package is already in the local Xcode cache."
